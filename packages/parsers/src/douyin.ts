@@ -1,58 +1,72 @@
-import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
-import { runYtdlp } from "./tiktok";
+import type { IVideoParser, ParseOptions, VideoInfo } from "@streamgrab/types";
 
-interface YtdlpFormat {
-  format_id: string;
-  ext: string;
-  width?: number;
-  height?: number;
-  tbr?: number;
-  vcodec?: string;
-  acodec?: string;
-  url?: string;
-  format_note?: string;
+const UA_MOBILE =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+
+interface RouterData {
+  loaderData: {
+    "video_(id)/page": {
+      videoInfoRes: {
+        item_list: Array<{
+          aweme_id: string;
+          desc: string;
+          author: { nickname: string };
+          video: {
+            play_addr: { url_list: string[] };
+            cover: { url_list: string[] };
+            duration: number;
+            width: number;
+            height: number;
+          };
+        }>;
+      };
+    };
+  };
 }
 
-interface YtdlpOutput {
-  id?: string;
-  title?: string;
-  thumbnail?: string;
-  duration?: number;
-  uploader?: string;
-  formats?: YtdlpFormat[];
-  url?: string;
+async function resolveVideoId(url: string): Promise<string> {
+  // 短链先重定向到 iesdouyin.com，从路径提取 video id
+  const resp = await fetch(url, {
+    redirect: "manual",
+    headers: { "User-Agent": UA_MOBILE },
+  });
+  const location = resp.headers.get("location") ?? "";
+  // iesdouyin.com/share/video/{id}/ 或 douyin.com/video/{id}
+  const m = location.match(/\/video\/(\d+)/);
+  if (m) return m[1]!;
+  // 直接从原始 URL 提取
+  const m2 = url.match(/\/video\/(\d+)/);
+  if (m2) return m2[1]!;
+  throw new Error("无法从抖音链接提取视频 ID");
 }
 
-function buildStreams(data: YtdlpOutput): VideoStream[] {
-  const formats = data.formats ?? [];
-  const videoFormats = formats.filter((f) => f.vcodec && f.vcodec !== "none" && f.url);
+async function fetchVideoInfo(videoId: string): Promise<RouterData["loaderData"]["video_(id)/page"]["videoInfoRes"]["item_list"][0]> {
+  const resp = await fetch(`https://www.iesdouyin.com/share/video/${videoId}/`, {
+    headers: {
+      "User-Agent": UA_MOBILE,
+      Referer: "https://www.iesdouyin.com",
+    },
+  });
+  const html = await resp.text();
 
-  if (videoFormats.length === 0 && data.url) {
-    return [{ quality: "original", label: "原画无水印", url: data.url, mimeType: "video/mp4" }];
+  const m = html.match(/window\._ROUTER_DATA\s*=\s*(\{.+)/);
+  if (!m) throw new Error("抖音页面结构变化，无法解析视频信息");
+
+  const raw = m[1]!;
+  let depth = 0;
+  let end = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === "{") depth++;
+    else if (raw[i] === "}") {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
   }
 
-  const streams: VideoStream[] = [];
-  const seen = new Set<string>();
-
-  for (const f of videoFormats) {
-    const h = f.height ?? 0;
-    const key = `${h}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const label = h >= 1080 ? "1080P" : h >= 720 ? "720P" : h >= 480 ? "480P" : h > 0 ? `${h}P` : "原画无水印";
-    streams.push({
-      quality: label,
-      label,
-      url: f.url!,
-      mimeType: `video/${f.ext ?? "mp4"}`,
-      width: f.width,
-      height: f.height ?? undefined,
-      bitrate: f.tbr ? Math.round(f.tbr * 1000) : undefined,
-    });
-  }
-
-  return streams.sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
+  const data: RouterData = JSON.parse(raw.slice(0, end));
+  const items = data.loaderData["video_(id)/page"]?.videoInfoRes?.item_list;
+  if (!items?.length) throw new Error("抖音返回的视频列表为空");
+  return items[0]!;
 }
 
 export const douyinParser: IVideoParser = {
@@ -64,26 +78,37 @@ export const douyinParser: IVideoParser = {
 
   async parse(url: string, _options: ParseOptions): Promise<VideoInfo> {
     console.log(`[douyin] 开始解析 url="${url}"`);
-    // 抖音 API 需要浏览器执行 JS 生成签名（a_bogus），无法在纯 HTTP 环境下解析。
-    // 在 Vercel 等无服务器环境中暂不支持，请本地部署后使用。
-    throw new Error(
-      "抖音解析暂不支持在 Vercel 部署版本中使用（需要本地浏览器环境）。请改用本地部署版本，或直接粘贴抖音视频的直链地址。"
-    );
-    // 以下代码保留供本地环境参考，生产环境不会执行
-    const raw = await (async () => "")(); // 防止 TS 报 unreachable
 
-    console.log(`[douyin] yt-dlp 输出长度: ${raw.length} 字节`);
-    const data: YtdlpOutput = JSON.parse(raw);
-    console.log(`[douyin] 解析到 id=${data.id} title="${data.title}" formats=${data.formats?.length ?? 0}`);
+    const videoId = await resolveVideoId(url);
+    console.log(`[douyin] 解析到 videoId=${videoId}`);
+
+    const item = await fetchVideoInfo(videoId);
+
+    const playUrls = item.video.play_addr.url_list;
+    if (!playUrls.length) throw new Error("未获取到视频播放地址");
+
+    // playwm（带水印）→ play（无水印）
+    const noWatermarkUrl = playUrls[0]!.replace("/playwm/", "/play/");
+
+    console.log(`[douyin] 解析成功 title="${item.desc.slice(0, 30)}"`);
 
     return {
-      id: data.id ?? url,
-      title: data.title ?? "抖音视频",
-      cover: data.thumbnail ?? "",
-      duration: Math.floor(data.duration ?? 0),
-      author: data.uploader ?? "未知作者",
+      id: item.aweme_id,
+      title: item.desc || "抖音视频",
+      cover: item.video.cover.url_list[0] ?? "",
+      duration: Math.floor((item.video.duration ?? 0) / 1000),
+      author: item.author.nickname ?? "未知作者",
       platform: "douyin",
-      streams: buildStreams(data),
+      streams: [
+        {
+          quality: "original",
+          label: "原画无水印",
+          url: noWatermarkUrl,
+          mimeType: "video/mp4",
+          width: item.video.width,
+          height: item.video.height,
+        },
+      ],
       rawUrl: url,
     };
   },
