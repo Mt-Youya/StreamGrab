@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   generateQrcode,
-  pollQrcode,
+  pollQrcodeStatus,
   clearBilibiliSession,
   isLoggedIn,
   loadBilibiliSession,
+  saveBilibiliSession,
 } from "@/lib/bilibili-browser";
-import { chromium } from "playwright";
-
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-// GET /api/bilibili-login?action=status — 查询当前登录状态
-// POST /api/bilibili-login  { action: "generate" } — 生成二维码
-// POST /api/bilibili-login  { action: "poll", qrcode_key } — 轮询扫码状态
-// POST /api/bilibili-login  { action: "logout" } — 清除 session
 
 export async function GET() {
   const loggedIn = isLoggedIn();
@@ -23,9 +15,7 @@ export async function GET() {
   return NextResponse.json({
     loggedIn,
     savedAt: session?.savedAt,
-    sessdataHint: sessdata
-      ? sessdata.value.slice(0, 8) + "..."
-      : null,
+    sessdataHint: sessdata ? sessdata.value.slice(0, 8) + "..." : null,
   });
 }
 
@@ -45,54 +35,24 @@ export async function POST(req: NextRequest) {
     if (!qrcode_key) {
       return NextResponse.json({ success: false, error: "缺少 qrcode_key" }, { status: 400 });
     }
-
-    // 用 Playwright 轮询，这样可以同时捕获登录 cookie
-    const browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox"],
-    });
     try {
-      const context = await browser.newContext({ userAgent: UA });
-      const page = await context.newPage();
-      await page.goto("https://www.bilibili.com", {
-        waitUntil: "domcontentloaded",
-        timeout: 15000,
-      });
-
-      const pollResp = await page.evaluate(async (key: string) => {
-        const r = await fetch(
-          `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${key}`,
-          { credentials: "include" }
-        );
-        return r.json();
-      }, qrcode_key);
-
-      const innerCode = (pollResp as { data?: { code?: number } }).data?.code;
-
-      if (innerCode === 0) {
-        // 登录成功
-        const cookies = await context.cookies("https://www.bilibili.com");
-        const hasSESSDATA = cookies.some((c) => c.name === "SESSDATA" && c.value.length > 10);
-        if (hasSESSDATA) {
-          const { saveBilibiliSession } = await import("@/lib/bilibili-browser");
-          saveBilibiliSession(cookies);
-          await browser.close();
-          return NextResponse.json({ success: true, status: "confirmed" });
-        }
+      const result = await pollQrcodeStatus(qrcode_key);
+      if (result.status === "confirmed" && result.cookieStr) {
+        // 把 cookie 字符串转成对象数组存储
+        const cookies = result.cookieStr.split(";").map((c) => {
+          const [name, ...rest] = c.trim().split("=");
+          return {
+            name: name?.trim() ?? "",
+            value: rest.join("="),
+            domain: ".bilibili.com",
+            path: "/",
+          };
+        }).filter((c) => c.name);
+        saveBilibiliSession(cookies);
       }
-
-      await browser.close();
-      const status =
-        innerCode === 86090 ? "scanned"
-        : innerCode === 86038 ? "expired"
-        : "waiting";
-      return NextResponse.json({ success: true, status });
+      return NextResponse.json({ success: true, status: result.status });
     } catch (err) {
-      await browser.close().catch(() => {});
-      return NextResponse.json(
-        { success: false, error: (err as Error).message },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: (err as Error).message }, { status: 500 });
     }
   }
 

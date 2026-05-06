@@ -62,34 +62,15 @@ export const douyinParser: IVideoParser = {
     return /douyin\.com/.test(url) || /v\.douyin\.com/.test(url);
   },
 
-  async parse(url: string, options: ParseOptions): Promise<VideoInfo> {
-    const ytdlpPath = options.ytdlpPath ?? "yt-dlp";
-    console.log(`[douyin] 开始解析 url="${url}" ytdlpPath=${ytdlpPath}`);
-
-    const args = ["--dump-json", "--no-playlist"];
-    if (options.proxy) {
-      args.push("--proxy", options.proxy);
-    }
-    if (options.douyinCookieFile) {
-      console.log(`[douyin] 使用 cookie 文件: ${options.douyinCookieFile}`);
-      args.push("--cookies", options.douyinCookieFile);
-    } else {
-      console.warn("[douyin] 未配置 cookie 文件，抖音解析大概率失败（需要 Netscape 格式 cookie 文件）");
-    }
-    args.push(url);
-
-    let raw: string;
-    try {
-      raw = await runYtdlp(args, options.proxy);
-    } catch (err) {
-      const msg = (err as Error).message;
-      console.error(`[douyin] yt-dlp 调用失败:`, msg);
-      // 给用户友好的提示
-      if (msg.includes("cookies")) {
-        throw new Error("抖音解析需要登录 Cookie，请在设置中配置抖音 Cookie（Netscape 格式文件路径）");
-      }
-      throw new Error(`抖音解析失败: ${msg}`);
-    }
+  async parse(url: string, _options: ParseOptions): Promise<VideoInfo> {
+    console.log(`[douyin] 开始解析 url="${url}"`);
+    // 抖音 API 需要浏览器执行 JS 生成签名（a_bogus），无法在纯 HTTP 环境下解析。
+    // 在 Vercel 等无服务器环境中暂不支持，请本地部署后使用。
+    throw new Error(
+      "抖音解析暂不支持在 Vercel 部署版本中使用（需要本地浏览器环境）。请改用本地部署版本，或直接粘贴抖音视频的直链地址。"
+    );
+    // 以下代码保留供本地环境参考，生产环境不会执行
+    const raw = await (async () => "")(); // 防止 TS 报 unreachable
 
     console.log(`[douyin] yt-dlp 输出长度: ${raw.length} 字节`);
     const data: YtdlpOutput = JSON.parse(raw);
