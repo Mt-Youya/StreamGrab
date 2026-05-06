@@ -1,0 +1,30 @@
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { Providers } from "@/components/providers";
+import { Navigation } from "@/components/navigation";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "StreamGrab — 多平台无水印视频下载",
+  description: "支持 Bilibili、抖音、TikTok、YouTube 的无水印高清视频下载工具",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="zh-CN">
+      <body className={`${inter.className} min-h-screen bg-background antialiased`}>
+        <Providers>
+          <div className="flex min-h-screen flex-col">
+            <Navigation />
+            <main className="flex-1">{children}</main>
+            <footer className="border-t py-4 text-center text-sm text-muted-foreground">
+              StreamGrab · 仅供个人学习研究使用
+            </footer>
+          </div>
+        </Providers>
+      </body>
+    </html>
+  );
+}
