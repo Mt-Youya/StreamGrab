@@ -1,91 +1,51 @@
-import Database from "better-sqlite3";
-import path from "node:path";
-import fs from "node:fs";
+/**
+ * 历史记录存储 — 纯前端 localStorage 实现（Vercel 兼容）
+ * 服务端调用时返回空结果，所有实际读写发生在客户端组件中。
+ */
 import type { HistoryRecord, Platform } from "@streamgrab/types";
 
-const dbPath = process.env["DATABASE_PATH"] ?? "./data/db.sqlite";
-const dir = path.dirname(dbPath);
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
+const STORAGE_KEY = "streamgrab_history";
+const MAX_RECORDS = 200;
+
+function isClient() {
+  return typeof window !== "undefined";
 }
 
-const db = new Database(dbPath);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS download_history (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    platform TEXT NOT NULL,
-    quality TEXT NOT NULL,
-    url TEXT NOT NULL,
-    filename TEXT NOT NULL,
-    size INTEGER,
-    cover TEXT NOT NULL DEFAULT '',
-    created_at INTEGER NOT NULL
-  )
-`);
-
-interface DbRow {
-  id: string;
-  title: string;
-  platform: string;
-  quality: string;
-  url: string;
-  filename: string;
-  size: number | null;
-  cover: string;
-  created_at: number;
+function readAll(): HistoryRecord[] {
+  if (!isClient()) return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as HistoryRecord[];
+  } catch {
+    return [];
+  }
 }
 
-function toRecord(row: DbRow): HistoryRecord {
-  return {
-    id: row.id,
-    title: row.title,
-    platform: row.platform as Platform,
-    quality: row.quality,
-    url: row.url,
-    filename: row.filename,
-    size: row.size ?? undefined,
-    cover: row.cover,
-    createdAt: row.created_at,
-  };
+function writeAll(records: HistoryRecord[]) {
+  if (!isClient()) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records.slice(0, MAX_RECORDS)));
+  } catch {
+    // localStorage 可能已满，忽略
+  }
 }
 
 export function insertHistory(record: HistoryRecord): void {
-  db.prepare(
-    `INSERT OR REPLACE INTO download_history
-     (id, title, platform, quality, url, filename, size, cover, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    record.id,
-    record.title,
-    record.platform,
-    record.quality,
-    record.url,
-    record.filename,
-    record.size ?? null,
-    record.cover,
-    record.createdAt
-  );
+  const records = readAll().filter((r) => r.id !== record.id);
+  writeAll([record, ...records]);
 }
 
 export function listHistory(platform?: Platform, limit = 100): HistoryRecord[] {
-  if (platform) {
-    const rows = db
-      .prepare("SELECT * FROM download_history WHERE platform = ? ORDER BY created_at DESC LIMIT ?")
-      .all(platform, limit) as DbRow[];
-    return rows.map(toRecord);
-  }
-  const rows = db
-    .prepare("SELECT * FROM download_history ORDER BY created_at DESC LIMIT ?")
-    .all(limit) as DbRow[];
-  return rows.map(toRecord);
+  const records = readAll();
+  const filtered = platform ? records.filter((r) => r.platform === platform) : records;
+  return filtered.slice(0, limit);
 }
 
 export function deleteHistory(id: string): void {
-  db.prepare("DELETE FROM download_history WHERE id = ?").run(id);
+  writeAll(readAll().filter((r) => r.id !== id));
 }
 
 export function deleteAllHistory(): void {
-  db.prepare("DELETE FROM download_history").run();
+  if (isClient()) localStorage.removeItem(STORAGE_KEY);
 }

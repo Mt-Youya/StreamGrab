@@ -8,6 +8,7 @@ import { sanitizeFilename, formatFileSize } from "@/lib/utils";
 import type { DownloadApiRequest } from "@streamgrab/types";
 import { v4 as uuidv4 } from "uuid";
 import { Download, Lock } from "lucide-react";
+import { insertHistory } from "@/lib/db";
 
 // 各平台支持的输出格式
 const FORMAT_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -96,7 +97,22 @@ export function QualitySelector() {
       const contentDisposition = resp.headers.get("content-disposition") ?? "";
       const filenamePart = contentDisposition.match(/filename="([^"]+)"/)?.[1] ?? filename;
 
+      const platform = resp.headers.get("x-platform") ?? "bilibili";
       const blob = await resp.blob();
+
+      // 写入历史记录（localStorage，客户端）
+      insertHistory({
+        id: uuidv4(),
+        title: video.title,
+        platform: platform as import("@streamgrab/types").Platform,
+        quality: selected.quality,
+        url: video.rawUrl,
+        filename: decodeURIComponent(filenamePart),
+        size: blob.size,
+        cover: video.cover,
+        createdAt: Date.now(),
+      });
+
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;

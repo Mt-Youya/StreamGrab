@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/detect-platform";
 import { formatFileSize } from "@/lib/utils";
+import { listHistory, deleteHistory } from "@/lib/db";
 import type { HistoryRecord, Platform } from "@streamgrab/types";
 import { Trash2, Search, RefreshCw } from "lucide-react";
 
@@ -20,37 +20,28 @@ const PLATFORMS: Array<{ value: Platform | ""; label: string }> = [
   { value: "youtube", label: "YouTube" },
 ];
 
-async function fetchHistory(platform?: Platform): Promise<HistoryRecord[]> {
-  const url = platform ? `/api/history?platform=${platform}` : "/api/history";
-  const resp = await fetch(url);
-  const data = await resp.json();
-  return data.data ?? [];
-}
-
 export function HistoryTable() {
   const [platform, setPlatform] = useState<Platform | "">("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const queryClient = useQueryClient();
+  const [records, setRecords] = useState<HistoryRecord[]>([]);
 
-  const { data: records = [], isLoading, refetch } = useQuery({
-    queryKey: ["history", platform],
-    queryFn: () => fetchHistory(platform || undefined),
-  });
+  const load = useCallback(() => {
+    setRecords(listHistory(platform || undefined));
+  }, [platform]);
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await fetch(`/api/history/${id}`, { method: "DELETE" });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] }),
-  });
+  useEffect(() => { load(); }, [load]);
 
-  const deleteSelected = async () => {
-    for (const id of selected) {
-      await deleteMutation.mutateAsync(id);
-    }
+  function handleDelete(id: string) {
+    deleteHistory(id);
+    load();
+  }
+
+  function handleDeleteSelected() {
+    selected.forEach((id) => deleteHistory(id));
     setSelected(new Set());
-  };
+    load();
+  }
 
   const filtered = records.filter((r) =>
     r.title.toLowerCase().includes(search.toLowerCase())
@@ -79,27 +70,25 @@ export function HistoryTable() {
         </div>
         <Select
           value={platform}
-          onChange={(e) => setPlatform(e.target.value as Platform | "")}
+          onChange={(e) => { setPlatform(e.target.value as Platform | ""); }}
           className="w-36"
         >
           {PLATFORMS.map((p) => (
             <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </Select>
-        <Button variant="outline" size="icon" onClick={() => refetch()}>
+        <Button variant="outline" size="icon" onClick={load}>
           <RefreshCw className="h-4 w-4" />
         </Button>
         {selected.size > 0 && (
-          <Button variant="destructive" size="sm" onClick={deleteSelected}>
+          <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
             <Trash2 className="h-4 w-4 mr-1" />
             删除 {selected.size} 项
           </Button>
         )}
       </div>
 
-      {isLoading ? (
-        <p className="text-center text-muted-foreground py-12">加载中...</p>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="text-center text-muted-foreground py-12">暂无下载记录</p>
       ) : (
         <div className="rounded-md border overflow-hidden">
@@ -167,7 +156,7 @@ export function HistoryTable() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => deleteMutation.mutate(record.id)}
+                      onClick={() => handleDelete(record.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

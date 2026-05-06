@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTask, setProgress, setStatus } from "@streamgrab/core";
-import { insertHistory } from "@/lib/db";
 import { sanitizeFilename } from "@/lib/utils";
-import type { DownloadApiRequest, HistoryRecord, Platform } from "@streamgrab/types";
+import type { DownloadApiRequest, Platform } from "@streamgrab/types";
 import { v4 as uuidv4 } from "uuid";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -194,13 +193,6 @@ export async function POST(req: NextRequest) {
       setStatus(id, "done");
       setProgress(id, 100);
       tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
-      try {
-        insertHistory({
-          id: uuidv4(), title: safeFilename, platform: platform as Platform,
-          quality, url, filename: safeFilename,
-          size: outputBuf.byteLength, cover: "", createdAt: Date.now(),
-        } as HistoryRecord);
-      } catch {}
       const dlFilename = safeFilename.endsWith(outputExt) ? safeFilename : safeFilename + outputExt;
       return new NextResponse(outputBuf, {
         headers: {
@@ -208,6 +200,7 @@ export async function POST(req: NextRequest) {
           "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
           "Content-Length": String(outputBuf.byteLength),
           "X-Task-Id": id,
+          "X-Platform": platform,
         },
       });
     }
@@ -254,20 +247,6 @@ export async function POST(req: NextRequest) {
 
       // 清理临时文件
       tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
-
-      try {
-        insertHistory({
-          id: uuidv4(),
-          title: safeFilename,
-          platform: platform as Platform,
-          quality,
-          url: url ?? streamUrl,
-          filename: safeFilename,
-          size: outputSize,
-          cover: "",
-          createdAt: Date.now(),
-        } as HistoryRecord);
-      } catch {}
 
       const dlFilename2 = safeFilename.endsWith(outputExt) ? safeFilename : safeFilename + outputExt;
       return new NextResponse(outputBuf, {
@@ -322,21 +301,6 @@ export async function POST(req: NextRequest) {
           }
           setStatus(id, "done");
           setProgress(id, 100);
-
-          try {
-            insertHistory({
-              id: uuidv4(),
-              title: safeFilename,
-              platform: platform as Platform,
-              quality,
-              url: url ?? streamUrl,
-              filename: safeFilename,
-              size: contentLength > 0 ? contentLength : undefined,
-              cover: "",
-              createdAt: Date.now(),
-            } as HistoryRecord);
-          } catch {}
-
           controller.close();
         } catch (err) {
           setStatus(id, "error", (err as Error).message);
@@ -351,6 +315,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": `video/${outputFormat}`,
         "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename3)}"`,
         "X-Task-Id": id,
+        "X-Platform": platform,
         ...(contentLength > 0 ? { "Content-Length": String(contentLength) } : {}),
       },
     });
