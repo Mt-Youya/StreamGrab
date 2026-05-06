@@ -27,7 +27,7 @@ interface YtdlpOutput {
 
 function runYtdlp(args: string[], proxy?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env } as Record<string, string>;
+    const env: NodeJS.ProcessEnv = { ...process.env };
     if (proxy) env["HTTP_PROXY"] = proxy;
 
     const cmdStr = `yt-dlp ${args.join(" ")}`;

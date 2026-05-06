@@ -11,7 +11,7 @@ const COOKIE_PATH = path.join(os.tmpdir(), "streamgrab_bilibili_cookies.json");
 const COOKIE_TTL_MS = 6 * 60 * 60 * 1000;
 
 interface CachedSession {
-  cookies: Array<{ name: string; value: string; domain: string; path: string; secure?: boolean; httpOnly?: boolean; sameSite?: string }>;
+  cookies: Array<{ name: string; value: string; domain: string; path: string; secure?: boolean; httpOnly?: boolean; sameSite?: "Strict" | "Lax" | "None" }>;
   savedAt: number;
 }
 

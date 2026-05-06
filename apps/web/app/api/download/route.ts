@@ -89,7 +89,7 @@ function ytdlpDownload(
     ];
     if (proxy) args.push("--proxy", proxy);
     console.log(`[download] yt-dlp format="${formatSelector.slice(0, 40)}" outputFormat=${ext}`);
-    const env = { ...process.env, ...(proxy ? { HTTP_PROXY: proxy } : {}) } as Record<string, string>;
+    const env: NodeJS.ProcessEnv = { ...process.env, ...(proxy ? { HTTP_PROXY: proxy } : {}) };
     const proc = spawn("yt-dlp", args, { env });
     let stdout = "";
     let stderr = "";
