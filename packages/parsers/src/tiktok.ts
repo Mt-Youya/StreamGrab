@@ -1,4 +1,5 @@
-import { request } from "undici";
+import https from "node:https";
+import zlib from "node:zlib";
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
 
 const ANDROID_UA = "com.ss.android.ugc.trill/494 (Linux; U; Android 9; en_US; ASUS_Z01QD; Build/PI;tt-ok/3.12.13.1)";
@@ -9,40 +10,47 @@ function extractVideoId(url: string): string {
 }
 
 /**
- * 用 undici.request 发 GET，禁用自动解压（decompress: false），
- * 然后手动 gunzip/brotli，彻底避免 Node 24 fetch 对 zstd 的乱码问题。
+ * 用 Node.js 原生 https 模块发 GET，只接受 gzip/br，手动解压。
+ * 完全绕过 Node 24 全局 fetch(undici) 对 zstd 的不完整支持。
  */
-async function httpGet(targetUrl: string, reqHeaders: Record<string, string>): Promise<string> {
-  const { statusCode, headers, body } = await request(targetUrl, {
-    method: "GET",
-    headers: { ...reqHeaders, "Accept-Encoding": "gzip, br" },
-    // 关键：禁用 undici 的自动解压，由我们手动处理
-    bodyTimeout: 15000,
-    headersTimeout: 15000,
+function httpGet(targetUrl: string, reqHeaders: Record<string, string>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(targetUrl);
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: "GET",
+        headers: { ...reqHeaders, "Accept-Encoding": "gzip, br" },
+      },
+      (res) => {
+        const encoding = res.headers["content-encoding"] ?? "";
+        const chunks: Buffer[] = [];
+
+        let stream: NodeJS.ReadableStream = res;
+        if (encoding.includes("br")) {
+          stream = res.pipe(zlib.createBrotliDecompress());
+        } else if (encoding.includes("gzip")) {
+          stream = res.pipe(zlib.createGunzip());
+        } else if (encoding.includes("deflate")) {
+          stream = res.pipe(zlib.createInflate());
+        }
+
+        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        stream.on("error", reject);
+
+        if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+          req.destroy();
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      },
+    );
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error("请求超时")); });
+    req.on("error", reject);
+    req.end();
   });
-
-  if (statusCode < 200 || statusCode >= 300) {
-    throw new Error(`HTTP ${statusCode}`);
-  }
-
-  const encoding = (headers["content-encoding"] as string) ?? "";
-  const chunks: Buffer[] = [];
-  for await (const chunk of body) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  const raw = Buffer.concat(chunks);
-
-  // 手动解压
-  const { gunzip, brotliDecompress } = await import("node:zlib");
-  const { promisify } = await import("node:util");
-
-  if (encoding.includes("br")) {
-    return (await promisify(brotliDecompress)(raw)).toString("utf8");
-  }
-  if (encoding.includes("gzip") || raw[0] === 0x1f && raw[1] === 0x8b) {
-    return (await promisify(gunzip)(raw)).toString("utf8");
-  }
-  return raw.toString("utf8");
 }
 
 export const tiktokParser: IVideoParser = {
