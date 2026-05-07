@@ -1,7 +1,3 @@
-import https from "node:https";
-import http from "node:http";
-import zlib from "node:zlib";
-import { URL } from "node:url";
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
 
 const ANDROID_UA = "com.ss.android.ugc.trill/494 (Linux; U; Android 9; en_US; ASUS_Z01QD; Build/PI;tt-ok/3.12.13.1)";
@@ -11,57 +7,21 @@ function extractVideoId(url: string): string {
   return m?.[1] ?? "";
 }
 
-/** 发起 HTTP GET，支持代理，自动解压 gzip/deflate/br */
-function httpGet(targetUrl: string, headers: Record<string, string>, proxy?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(targetUrl);
-
-    const reqOptions: http.RequestOptions = {
+/** 发起 HTTP GET，自动解压（fetch 原生支持 gzip/br/deflate） */
+async function httpGet(targetUrl: string, headers: Record<string, string>): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(targetUrl, {
       method: "GET",
-      headers: { ...headers, "Accept-Encoding": "gzip, deflate, br" },
-    };
-
-    let requester: typeof http | typeof https;
-
-    if (proxy) {
-      const proxyParsed = new URL(proxy);
-      reqOptions.host = proxyParsed.hostname;
-      reqOptions.port = proxyParsed.port;
-      reqOptions.path = targetUrl;
-      reqOptions.headers = {
-        ...reqOptions.headers,
-        Host: parsed.hostname,
-      };
-      requester = proxyParsed.protocol === "https:" ? https : http;
-    } else {
-      reqOptions.host = parsed.hostname;
-      reqOptions.port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-      reqOptions.path = parsed.pathname + parsed.search;
-      requester = parsed.protocol === "https:" ? https : http;
-    }
-
-    const req = requester.request(reqOptions, (res) => {
-      const encoding = res.headers["content-encoding"] ?? "";
-      let stream: NodeJS.ReadableStream = res;
-
-      if (encoding.includes("br")) {
-        stream = res.pipe(zlib.createBrotliDecompress());
-      } else if (encoding.includes("gzip")) {
-        stream = res.pipe(zlib.createGunzip());
-      } else if (encoding.includes("deflate")) {
-        stream = res.pipe(zlib.createInflate());
-      }
-
-      const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-      stream.on("error", reject);
+      headers: { ...headers },
+      signal: controller.signal,
     });
-
-    req.on("error", reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error("请求超时")); });
-    req.end();
-  });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const tiktokParser: IVideoParser = {
@@ -86,10 +46,10 @@ export const tiktokParser: IVideoParser = {
 
     const apiUrl = `https://api16-normal-c-useast1a.tiktokv.com/aweme/v1/feed/?aweme_id=${videoId}&iid=7318518857994389254&device_id=7318517321748022790&channel=googleplay&app_name=musical_ly&version_code=300904&device_platform=android&device_type=ASUS_Z01QD&os_version=9`;
 
-    const proxy = options.proxy;
-    if (proxy) console.log(`[tiktok] 使用代理: ${proxy}`);
-
-    const raw = await httpGet(apiUrl, { "User-Agent": ANDROID_UA, "Accept": "application/json" }, proxy);
+    const raw = await httpGet(apiUrl, {
+      "User-Agent": ANDROID_UA,
+      "Accept": "application/json",
+    });
 
     let json: {
       aweme_list?: Array<{

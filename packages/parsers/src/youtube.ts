@@ -32,23 +32,45 @@ export const youtubeParser: IVideoParser = {
     // 动态 import，让 serverExternalPackages 生效（不被 Next.js bundle）
     const { Innertube } = await import("youtubei.js");
 
-    // 创建 Innertube 实例，自动处理 PO Token / visitor_data
-    const yt = await Innertube.create({
-      retrieve_player: true,
-      generate_session_locally: true,
-    });
-
     const videoId = url.match(
       /(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/
     )?.[1];
     if (!videoId) throw new Error("无法从 URL 提取 YouTube 视频 ID");
 
-    const info = await yt.getInfo(videoId);
+    // 依次尝试多个 client，直到拿到 streaming_data
+    // TV_EMBEDDED / IOS 不需要 PO Token，规避 Vercel IP bot 检测
+    const CLIENTS = ["TV_EMBEDDED", "IOS", "ANDROID", "WEB"] as const;
+    let info: Awaited<ReturnType<InstanceType<typeof Innertube>["getInfo"]>> | null = null;
+    let lastError: Error | null = null;
+
+    for (const client of CLIENTS) {
+      try {
+        const yt = await Innertube.create({
+          client_type: client as never,
+          retrieve_player: true,
+          generate_session_locally: true,
+        });
+        const candidate = await yt.getInfo(videoId);
+        if (candidate.streaming_data) {
+          info = candidate;
+          console.log(`[youtube] client=${client} 获取流成功`);
+          break;
+        }
+        console.log(`[youtube] client=${client} streaming_data 为空，尝试下一个`);
+      } catch (e) {
+        lastError = e as Error;
+        console.log(`[youtube] client=${client} 失败: ${(e as Error).message}`);
+      }
+    }
+
+    if (!info) {
+      throw lastError ?? new Error("无法获取视频流信息，所有 client 均失败");
+    }
+
     const details = info.basic_info;
 
     // 获取所有流格式
-    const streamingData = info.streaming_data;
-    if (!streamingData) throw new Error("无法获取视频流信息，可能需要登录");
+    const streamingData = info.streaming_data!;
 
     const adaptiveFormats = streamingData.adaptive_formats ?? [];
 
