@@ -8,18 +8,27 @@ import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/detect-platform";
 import { formatDuration } from "@/lib/utils";
 import { Clock, User } from "lucide-react";
 
+function toCoverSrc(cover: string, platform: string): string {
+  if (platform === "bilibili" && cover) {
+    return `/api/proxy?url=${encodeURIComponent(cover)}`;
+  }
+  return cover;
+}
+
 export function VideoPreview() {
   const video = useAppStore((s) => s.currentVideo);
   if (!video) return null;
+
+  const coverSrc = toCoverSrc(video.cover, video.platform);
 
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
         <div className="flex gap-0 sm:flex-row flex-col">
           <div className="relative aspect-video w-full sm:w-56 shrink-0 bg-muted">
-            {video.cover ? (
+            {coverSrc ? (
               <Image
-                src={video.cover}
+                src={coverSrc}
                 alt={video.title}
                 fill
                 className="object-cover"

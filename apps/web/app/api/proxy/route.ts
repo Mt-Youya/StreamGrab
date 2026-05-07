@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": contentType,
       "Access-Control-Allow-Origin": "*",
+      "Cross-Origin-Resource-Policy": "cross-origin",
       ...(contentLength ? { "Content-Length": contentLength } : {}),
     },
   });
