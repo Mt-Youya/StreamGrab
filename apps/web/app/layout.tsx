@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Navigation } from "@/components/navigation";
 import { Analytics } from "@vercel/analytics/next";
 
-const inter = Inter({ subsets: ["latin"] });
+// 使用系统字体，避免 Google Fonts 网络依赖
+const inter = { className: "font-sans" };
 
 export const metadata: Metadata = {
   title: "StreamGrab — 多平台无水印视频下载",

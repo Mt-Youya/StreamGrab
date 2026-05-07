@@ -128,9 +128,7 @@ export function HistoryTable() {
                       {record.cover && (
                         <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
                           <Image
-                            src={record.platform === "bilibili"
-                              ? `/api/proxy?url=${encodeURIComponent(record.cover)}`
-                              : record.cover}
+                            src={`/api/proxy?url=${encodeURIComponent(record.cover)}`}
                             alt=""
                             fill
                             className="object-cover"

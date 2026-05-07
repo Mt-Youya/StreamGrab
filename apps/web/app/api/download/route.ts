@@ -28,12 +28,35 @@ function detectPlatformFromUrl(url: string): Platform {
   return "bilibili";
 }
 
-/** 下载到临时文件（用于 Bilibili 音视频合并） */
-async function downloadToTmp(url: string, headers: Record<string, string>, suffix: string): Promise<string> {
+/** 流式下载到临时文件，支持进度回调 */
+async function downloadToTmp(
+  url: string,
+  headers: Record<string, string>,
+  suffix: string,
+  onProgress?: (downloaded: number, total: number) => void,
+): Promise<string> {
   const resp = await fetch(url, { headers });
   if (!resp.ok || !resp.body) throw new Error(`下载失败 ${resp.status} ${resp.statusText}`);
+  const total = Number(resp.headers.get("content-length") ?? 0);
   const tmpPath = path.join(os.tmpdir(), `sg_${uuidv4()}${suffix}`);
-  fs.writeFileSync(tmpPath, Buffer.from(await resp.arrayBuffer()));
+  const writeStream = fs.createWriteStream(tmpPath);
+  const reader = resp.body.getReader();
+  let downloaded = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      writeStream.write(value);
+      downloaded += value.byteLength;
+      onProgress?.(downloaded, total);
+    }
+  } finally {
+    writeStream.end();
+    await new Promise<void>((res, rej) => {
+      writeStream.on("finish", res);
+      writeStream.on("error", rej);
+    });
+  }
   return tmpPath;
 }
 
@@ -96,9 +119,9 @@ export async function POST(req: NextRequest) {
 
     console.log(`[download] platform=${platform} hasAudio=${!!audioUrl} filename=${safeFilename}`);
 
-    // ── YouTube / TikTok：用 ytdl 流式下载（绕过 googlevideo IP 绑定） ──
-    if ((platform === "youtube" || platform === "tiktok") && rawUrl) {
-      console.log(`[download] ${platform} ytdl 模式 formatId=${formatId}`);
+    // ── YouTube：用 ytdl 流式下载（绕过 googlevideo IP 绑定） ──
+    if (platform === "youtube" && rawUrl) {
+      console.log(`[download] youtube ytdl 模式 formatId=${formatId}`);
       setProgress(id, 5);
 
       // formatId 格式：videoItag+audioItag 或 单itag
@@ -177,11 +200,23 @@ export async function POST(req: NextRequest) {
     // ── B站 DASH（有独立音频流）→ fetch 两流 + FFmpeg 合并 ──
     if (audioUrl) {
       setProgress(id, 5);
+      // 视频+音频并发下载，实时合并进度映射到 5%~55%
+      let videoTotal = 0, audioTotal = 0, videoDl = 0, audioDl = 0;
+      function refreshProgress() {
+        const total = videoTotal + audioTotal;
+        if (total <= 0) return;
+        const pct = Math.round(((videoDl + audioDl) / total) * 50) + 5;
+        setProgress(id, Math.min(pct, 55));
+      }
       let videoPath: string, audioPath: string;
       try {
         [videoPath, audioPath] = await Promise.all([
-          downloadToTmp(streamUrl, headers, ".video.mp4"),
-          downloadToTmp(audioUrl, headers, ".audio.m4a"),
+          downloadToTmp(streamUrl, headers, ".video.mp4", (dl, total) => {
+            videoDl = dl; videoTotal = total || videoTotal; refreshProgress();
+          }),
+          downloadToTmp(audioUrl, headers, ".audio.m4a", (dl, total) => {
+            audioDl = dl; audioTotal = total || audioTotal; refreshProgress();
+          }),
         ]);
         tmpFiles.push(videoPath, audioPath);
       } catch (err) {

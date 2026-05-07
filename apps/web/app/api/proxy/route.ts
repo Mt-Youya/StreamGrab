@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_HOSTS = [
   "bilivideo.com", "bilivideo.cn", "hdslb.com",
-  "douyinvod.com", "douyinpic.com",
-  "tiktokcdn.com", "tiktokv.com",
-  "googlevideo.com",
+  "douyinvod.com", "douyinpic.com", "douyinstatic.com",
+  "tiktokcdn.com", "tiktokcdn-us.com", "tiktokv.com",
+  "googlevideo.com", "ytimg.com",
 ];
 
 function isAllowed(url: string): boolean {
@@ -18,9 +18,13 @@ function isAllowed(url: string): boolean {
 
 const REFERERS: Record<string, string> = {
   bilivideo: "https://www.bilibili.com",
+  hdslb: "https://www.bilibili.com",
   douyinvod: "https://www.douyin.com",
+  douyinpic: "https://www.douyin.com",
+  douyinstatic: "https://www.douyin.com",
   tiktok: "https://www.tiktok.com",
   googlevideo: "https://www.youtube.com",
+  ytimg: "https://www.youtube.com",
 };
 
 function getReferer(url: string): string {

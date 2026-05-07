@@ -1,4 +1,3 @@
-import ytdl from "@distube/ytdl-core";
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
 
 const QUALITY_MAP: Record<string, string> = {
@@ -12,11 +11,11 @@ const QUALITY_MAP: Record<string, string> = {
   "144": "144P",
 };
 
-function codecPriority(codecs: string): number {
-  if (/avc1|h264/i.test(codecs)) return 0;
-  if (/hvc|hevc|h265/i.test(codecs)) return 1;
-  if (/vp9/i.test(codecs)) return 2;
-  if (/av01|av1/i.test(codecs)) return 3;
+function codecPriority(mimeType: string): number {
+  if (/avc1|h264/i.test(mimeType)) return 0;
+  if (/hvc|hevc|h265/i.test(mimeType)) return 1;
+  if (/vp9/i.test(mimeType)) return 2;
+  if (/av01|av1/i.test(mimeType)) return 3;
   return 4;
 }
 
@@ -30,27 +29,48 @@ export const youtubeParser: IVideoParser = {
   async parse(url: string, options: ParseOptions): Promise<VideoInfo> {
     console.log(`[youtube] 开始解析 url="${url}"`);
 
-    const agentOpts = options.proxy
-      ? { requestOptions: { headers: {}, proxy: options.proxy } }
-      : undefined;
+    // 动态 import，让 serverExternalPackages 生效（不被 Next.js bundle）
+    const { Innertube } = await import("youtubei.js");
 
-    const info = await ytdl.getInfo(url, agentOpts as ytdl.getInfoOptions);
-    const { videoDetails } = info;
+    // 创建 Innertube 实例，自动处理 PO Token / visitor_data
+    const yt = await Innertube.create({
+      retrieve_player: true,
+      generate_session_locally: true,
+    });
 
-    // 视频流（仅视频，按画质+编码优先分组）
-    const videoFormats = ytdl.filterFormats(info.formats, "videoonly")
-      .filter((f) => f.hasVideo && f.height);
+    const videoId = url.match(
+      /(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/
+    )?.[1];
+    if (!videoId) throw new Error("无法从 URL 提取 YouTube 视频 ID");
+
+    const info = await yt.getInfo(videoId);
+    const details = info.basic_info;
+
+    // 获取所有流格式
+    const streamingData = info.streaming_data;
+    if (!streamingData) throw new Error("无法获取视频流信息，可能需要登录");
+
+    const adaptiveFormats = streamingData.adaptive_formats ?? [];
+
+    // 视频流（仅视频）
+    const videoFormats = adaptiveFormats.filter(
+      (f) => f.has_video && !f.has_audio && f.url
+    );
 
     // 音频流（选最高码率）
-    const audioFormats = ytdl.filterFormats(info.formats, "audioonly");
-    const bestAudio = audioFormats.sort((a, b) => (b.audioBitrate ?? 0) - (a.audioBitrate ?? 0))[0];
+    const audioFormats = adaptiveFormats.filter(
+      (f) => !f.has_video && f.has_audio && f.url
+    );
+    const bestAudio = audioFormats.sort(
+      (a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0)
+    )[0];
 
-    // 按画质分组，每组优先选 H.264
+    // 按画质分组，同画质优先 H.264
     const byHeight = new Map<number, typeof videoFormats[0]>();
     for (const f of videoFormats) {
       const h = f.height ?? 0;
       const existing = byHeight.get(h);
-      if (!existing || codecPriority(f.codecs ?? "") < codecPriority(existing.codecs ?? "")) {
+      if (!existing || codecPriority(f.mime_type ?? "") < codecPriority(existing.mime_type ?? "")) {
         byHeight.set(h, f);
       }
     }
@@ -58,31 +78,41 @@ export const youtubeParser: IVideoParser = {
     const streams: VideoStream[] = [];
     for (const [h, f] of [...byHeight.entries()].sort((a, b) => b[0] - a[0])) {
       const quality = QUALITY_MAP[String(h)] ?? `${h}P`;
-      const isH264 = /avc1|h264/i.test(f.codecs ?? "");
-      const codecName = (f.codecs ?? "").split(".")[0];
+      const mime = f.mime_type ?? "";
+      const isH264 = /avc1|h264/i.test(mime);
+      const codecName = mime.match(/codecs="([^"]+)"/)?.[1]?.split(".")[0] ?? "";
+      const itag = (f as { itag?: number }).itag;
+      const audioItag = (bestAudio as { itag?: number } | undefined)?.itag;
+
       streams.push({
         quality,
         label: isH264 ? quality : `${quality} (${codecName})`,
         url: f.url!,
-        mimeType: f.mimeType?.split(";")[0] ?? "video/mp4",
+        mimeType: mime.split(";")[0] ?? "video/mp4",
         width: f.width ?? undefined,
-        height: f.height ?? undefined,
+        height: h,
         bitrate: f.bitrate ?? undefined,
-        size: f.contentLength ? Number(f.contentLength) : undefined,
         audioUrl: bestAudio?.url,
-        // itag 作为 formatId 传给下载层
-        formatId: bestAudio ? `${f.itag}+${bestAudio.itag}` : String(f.itag),
+        formatId: itag !== undefined && audioItag !== undefined
+          ? `${itag}+${audioItag}`
+          : itag !== undefined ? String(itag) : undefined,
       });
     }
 
-    console.log(`[youtube] 解析成功 title="${videoDetails.title.slice(0, 30)}" streams=${streams.length}`);
+    if (streams.length === 0) {
+      throw new Error("未获取到视频流，可能需要配置 YOUTUBE_COOKIE 环境变量");
+    }
+
+    console.log(`[youtube] 解析成功 title="${details.title?.slice(0, 30)}" streams=${streams.length}`);
+
+    const thumbnail = details.thumbnail?.[details.thumbnail.length - 1]?.url ?? "";
 
     return {
-      id: videoDetails.videoId,
-      title: videoDetails.title,
-      cover: videoDetails.thumbnails.at(-1)?.url ?? "",
-      duration: Number(videoDetails.lengthSeconds),
-      author: videoDetails.author.name,
+      id: videoId,
+      title: details.title ?? "YouTube 视频",
+      cover: thumbnail,
+      duration: details.duration ?? 0,
+      author: details.author ?? "未知频道",
       platform: "youtube",
       streams,
       rawUrl: url,

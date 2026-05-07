@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@streamgrab/types", "@streamgrab/core", "@streamgrab/parsers"],
-  serverExternalPackages: ["playwright", "@distube/ytdl-core", "better-sqlite3"],
+  serverExternalPackages: ["playwright", "@distube/ytdl-core", "youtubei.js", "better-sqlite3"],
   // ffmpeg-wasm 需要 SharedArrayBuffer，要求 COOP + COEP headers
   async headers() {
     return [

@@ -33,7 +33,7 @@ interface SysCheck {
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({ httpProxy: "", ytdlpPath: "yt-dlp" });
+  const [settings, setSettings] = useState<Settings>({ httpProxy: "http://127.0.0.1:7897", ytdlpPath: "yt-dlp" });
   const [saved, setSaved] = useState(false);
   const [sysCheck, setSysCheck] = useState<SysCheck | null>(null);
 
@@ -294,7 +294,7 @@ export default function SettingsPage() {
             <Input
               value={settings.httpProxy}
               onChange={(e) => update("httpProxy", e.target.value)}
-              placeholder="http://127.0.0.1:7890"
+              placeholder="http://127.0.0.1:7897"
             />
             <p className="text-xs text-muted-foreground">
               TikTok 和 YouTube 需要通过代理访问。
