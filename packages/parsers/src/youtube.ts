@@ -40,17 +40,19 @@ export const youtubeParser: IVideoParser = {
     // 依次尝试多个 client，直到拿到 streaming_data
     // TV_EMBEDDED / IOS 不需要 PO Token，规避 Vercel IP bot 检测
     const CLIENTS = ["TV_EMBEDDED", "IOS", "ANDROID", "WEB"] as const;
-    let info: Awaited<ReturnType<InstanceType<typeof Innertube>["getInfo"]>> | null = null;
+    type YTClient = typeof CLIENTS[number];
+
+    const yt = await Innertube.create({
+      retrieve_player: true,
+      generate_session_locally: true,
+    });
+
+    let info: Awaited<ReturnType<typeof yt.getInfo>> | null = null;
     let lastError: Error | null = null;
 
     for (const client of CLIENTS) {
       try {
-        const yt = await Innertube.create({
-          client_type: client as never,
-          retrieve_player: true,
-          generate_session_locally: true,
-        });
-        const candidate = await yt.getInfo(videoId);
+        const candidate = await yt.getInfo(videoId, client as YTClient);
         if (candidate.streaming_data) {
           info = candidate;
           console.log(`[youtube] client=${client} 获取流成功`);

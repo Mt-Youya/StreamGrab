@@ -1,3 +1,4 @@
+import { request } from "undici";
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
 
 const ANDROID_UA = "com.ss.android.ugc.trill/494 (Linux; U; Android 9; en_US; ASUS_Z01QD; Build/PI;tt-ok/3.12.13.1)";
@@ -7,21 +8,41 @@ function extractVideoId(url: string): string {
   return m?.[1] ?? "";
 }
 
-/** 发起 HTTP GET，自动解压（fetch 原生支持 gzip/br/deflate） */
-async function httpGet(targetUrl: string, headers: Record<string, string>): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const res = await fetch(targetUrl, {
-      method: "GET",
-      headers: { ...headers },
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
+/**
+ * 用 undici.request 发 GET，禁用自动解压（decompress: false），
+ * 然后手动 gunzip/brotli，彻底避免 Node 24 fetch 对 zstd 的乱码问题。
+ */
+async function httpGet(targetUrl: string, reqHeaders: Record<string, string>): Promise<string> {
+  const { statusCode, headers, body } = await request(targetUrl, {
+    method: "GET",
+    headers: { ...reqHeaders, "Accept-Encoding": "gzip, br" },
+    // 关键：禁用 undici 的自动解压，由我们手动处理
+    bodyTimeout: 15000,
+    headersTimeout: 15000,
+  });
+
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error(`HTTP ${statusCode}`);
   }
+
+  const encoding = (headers["content-encoding"] as string) ?? "";
+  const chunks: Buffer[] = [];
+  for await (const chunk of body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks);
+
+  // 手动解压
+  const { gunzip, brotliDecompress } = await import("node:zlib");
+  const { promisify } = await import("node:util");
+
+  if (encoding.includes("br")) {
+    return (await promisify(brotliDecompress)(raw)).toString("utf8");
+  }
+  if (encoding.includes("gzip") || raw[0] === 0x1f && raw[1] === 0x8b) {
+    return (await promisify(gunzip)(raw)).toString("utf8");
+  }
+  return raw.toString("utf8");
 }
 
 export const tiktokParser: IVideoParser = {
@@ -74,8 +95,9 @@ export const tiktokParser: IVideoParser = {
     try {
       json = JSON.parse(raw);
     } catch {
-      const preview = raw.slice(0, 120).replace(/\s+/g, " ");
-      throw new Error(`TikTok API 返回非 JSON 内容: ${preview}`);
+      const hexPreview = Buffer.from(raw.slice(0, 16), "utf8").toString("hex");
+      const preview = raw.slice(0, 80).replace(/[\x00-\x1f\x7f-\xff]/g, "?");
+      throw new Error(`TikTok API 返回非 JSON 内容 hex=${hexPreview} text=${preview}`);
     }
 
     const aweme = json.aweme_list?.find((a) => a.aweme_id === videoId) ?? json.aweme_list?.[0];
