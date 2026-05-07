@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, LogIn, LogOut, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle, LogIn, LogOut, Loader2, RefreshCw, AlertTriangle, CheckCircle2, Server } from "lucide-react";
 import QRCode from "qrcode";
 
 const SETTINGS_KEY = "streamgrab_settings";
@@ -25,9 +25,17 @@ function loadSettings(): Settings {
 
 type BiliLoginState = "idle" | "loading" | "qrcode" | "scanned" | "confirmed" | "error";
 
+interface SysFeature { ok: boolean; note: string; install?: string }
+interface SysCheck {
+  isVercel: boolean;
+  deps: { ffmpeg: { available: boolean; version?: string }; playwright: { available: boolean }; browserlessToken: boolean };
+  features: Record<string, SysFeature>;
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({ httpProxy: "", ytdlpPath: "yt-dlp" });
   const [saved, setSaved] = useState(false);
+  const [sysCheck, setSysCheck] = useState<SysCheck | null>(null);
 
   // Bilibili 登录状态
   const [biliState, setBiliState] = useState<BiliLoginState>("idle");
@@ -39,6 +47,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setSettings(loadSettings());
+    // 系统依赖检查
+    fetch("/api/system-check")
+      .then((r) => r.json())
+      .then((d: SysCheck) => setSysCheck(d))
+      .catch(() => {});
     // 检查当前登录状态
     fetch("/api/bilibili-login")
       .then((r) => r.json())
@@ -126,12 +139,59 @@ export default function SettingsPage() {
     setQrcodeDataUrl("");
   }
 
+  const FEATURE_LABELS: Record<string, string> = {
+    bilibili_parse: "B站解析",
+    bilibili_hq: "B站高清下载（音视频合并）",
+    douyin: "抖音解析",
+    tiktok: "TikTok",
+    youtube: "YouTube",
+  };
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">设置</h1>
         <p className="text-muted-foreground text-sm mt-1">配置平台登录和下载选项</p>
       </div>
+
+      {/* 环境检查 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Server className="h-4 w-4" />
+            运行环境
+            {sysCheck && (
+              <span className="text-xs font-normal text-muted-foreground ml-auto">
+                {sysCheck.isVercel ? "☁️ Vercel 部署" : "💻 本地部署"}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!sysCheck ? (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />检测中...
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(sysCheck.features).map(([key, f]) => (
+                <div key={key} className="flex items-start gap-2 text-sm">
+                  {f.ok
+                    ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                    : <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />}
+                  <div>
+                    <span className="font-medium">{FEATURE_LABELS[key] ?? key}</span>
+                    <span className="text-muted-foreground ml-2">{f.note}</span>
+                    {!f.ok && f.install && (
+                      <pre className="mt-1 text-xs bg-muted rounded px-2 py-1 overflow-x-auto">{f.install}</pre>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Bilibili */}
       <Card>

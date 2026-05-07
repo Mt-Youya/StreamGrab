@@ -135,20 +135,17 @@ export async function POST(req: NextRequest) {
             });
           } catch (ffErr) {
             if ((ffErr as Error).message === "FFMPEG_NOT_FOUND") {
-              // Vercel 无 FFmpeg：降级为仅视频流，在响应头告知前端
-              console.warn("[download] FFmpeg 不可用，返回仅视频流（无音频）");
-              const videoBuf = fs.readFileSync(videoPath);
+              // Vercel 无 FFmpeg：通知前端用 ffmpeg-wasm 在浏览器端合并
+              console.warn("[download] FFmpeg 不可用，通知前端进行客户端合并");
               setStatus(id, "done");
-              setProgress(id, 100);
               tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
-              return new NextResponse(videoBuf, {
-                headers: {
-                  "Content-Type": "video/mp4",
-                  "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
-                  "Content-Length": String(videoBuf.byteLength),
-                  "X-Task-Id": id, "X-Platform": platform,
-                  "X-Warning": "no-audio",
-                },
+              return NextResponse.json({
+                needsClientMerge: true,
+                videoUrl: streamUrl,
+                audioUrl,
+                filename: dlFilename,
+                platform,
+                headers: headers,
               });
             }
             throw ffErr;
@@ -201,16 +198,16 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         const msg = (err as Error).message;
         if (msg === "FFMPEG_NOT_FOUND") {
-          const videoBuf = fs.readFileSync(videoPath);
-          setStatus(id, "done"); setProgress(id, 100);
+          // Vercel 无 FFmpeg：通知前端用 ffmpeg-wasm 在浏览器端合并
+          setStatus(id, "done");
           tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
-          return new NextResponse(videoBuf, {
-            headers: {
-              "Content-Type": "video/mp4",
-              "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
-              "Content-Length": String(videoBuf.byteLength),
-              "X-Task-Id": id, "X-Warning": "no-audio",
-            },
+          return NextResponse.json({
+            needsClientMerge: true,
+            videoUrl: streamUrl,
+            audioUrl,
+            filename: dlFilename,
+            platform,
+            headers,
           });
         }
         setStatus(id, "error", msg);

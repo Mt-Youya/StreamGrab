@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@streamgrab/core": "workspace:*",
     "@streamgrab/parsers": "workspace:*",
     "@streamgrab/types": "workspace:*",
