@@ -1,92 +1,5 @@
-import { spawn } from "node:child_process";
+import ytdl from "@distube/ytdl-core";
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
-
-interface YtdlpFormat {
-  format_id: string;
-  ext: string;
-  width?: number;
-  height?: number;
-  tbr?: number;
-  vcodec?: string;
-  acodec?: string;
-  url?: string;
-  format_note?: string;
-  cookies?: string;
-  http_headers?: Record<string, string>;
-}
-
-interface YtdlpOutput {
-  id?: string;
-  title?: string;
-  thumbnail?: string;
-  duration?: number;
-  uploader?: string;
-  formats?: YtdlpFormat[];
-  url?: string;
-}
-
-function runYtdlp(args: string[], proxy?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    if (proxy) env["HTTP_PROXY"] = proxy;
-
-    const cmdStr = `yt-dlp ${args.join(" ")}`;
-    console.log(`[yt-dlp] 执行命令: ${cmdStr}`);
-
-    const proc = spawn("yt-dlp", args, { env });
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
-    proc.on("close", (code) => {
-      console.log(`[yt-dlp] 进程退出码: ${code}`);
-      if (code !== 0) {
-        console.error(`[yt-dlp] stderr:\n${stderr.slice(0, 1000)}`);
-      }
-      if (code === 0) resolve(stdout);
-      else reject(new Error(`yt-dlp 退出码 ${code}: ${stderr.slice(0, 500)}`));
-    });
-    proc.on("error", (err) => {
-      console.error(`[yt-dlp] 启动失败 (是否已安装 yt-dlp?):`, err.message);
-      reject(err);
-    });
-  });
-}
-
-function buildStreams(data: YtdlpOutput): VideoStream[] {
-  const formats = data.formats ?? [];
-
-  // Prefer formats tagged as "without_watermark" or combined video+audio
-  const videoFormats = formats.filter((f) => f.vcodec && f.vcodec !== "none" && f.url);
-
-  if (videoFormats.length === 0 && data.url) {
-    return [{ quality: "original", label: "原画", url: data.url, mimeType: "video/mp4" }];
-  }
-
-  const streams: VideoStream[] = [];
-  const seen = new Set<string>();
-
-  for (const f of videoFormats) {
-    const h = f.height ?? 0;
-    const key = `${h}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const label = h >= 1080 ? "1080P" : h >= 720 ? "720P" : h >= 480 ? "480P" : h > 0 ? `${h}P` : "原画";
-    streams.push({
-      quality: label,
-      label,
-      url: f.url!,
-      mimeType: `video/${f.ext ?? "mp4"}`,
-      width: f.width,
-      height: f.height ?? undefined,
-      bitrate: f.tbr ? Math.round(f.tbr * 1000) : undefined,
-      formatId: f.format_id,
-    });
-  }
-
-  return streams.sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
-}
 
 export const tiktokParser: IVideoParser = {
   platform: "tiktok",
@@ -96,33 +9,75 @@ export const tiktokParser: IVideoParser = {
   },
 
   async parse(url: string, options: ParseOptions): Promise<VideoInfo> {
-    const ytdlpPath = options.ytdlpPath ?? "yt-dlp";
-    console.log(`[tiktok] 开始解析 url="${url}" ytdlpPath=${ytdlpPath}`);
-    const args = ["--dump-json", "--no-playlist", url];
+    console.log(`[tiktok] 开始解析 url="${url}"`);
 
-    let raw: string;
-    try {
-      raw = await runYtdlp([...args], options.proxy);
-    } catch (err) {
-      console.error(`[tiktok] yt-dlp 调用失败:`, err);
-      throw new Error(`TikTok 解析失败: ${(err as Error).message}`);
+    const agentOpts = options.proxy
+      ? { requestOptions: { proxy: options.proxy } }
+      : undefined;
+
+    const info = await ytdl.getInfo(url, agentOpts as ytdl.getInfoOptions);
+    const { videoDetails } = info;
+
+    // TikTok 格式：合并视频+音频的流
+    const formats = ytdl.filterFormats(info.formats, "videoandaudio")
+      .filter((f) => f.hasVideo && f.hasAudio);
+
+    // 也收集仅视频流，某些情况下质量更好
+    const videoOnly = ytdl.filterFormats(info.formats, "videoonly")
+      .filter((f) => f.hasVideo);
+
+    const allVideo = [...formats, ...videoOnly];
+
+    // 按高度去重，选最高质量
+    const byHeight = new Map<number, typeof allVideo[0]>();
+    for (const f of allVideo) {
+      const h = f.height ?? 0;
+      if (!byHeight.has(h) || (f.bitrate ?? 0) > (byHeight.get(h)!.bitrate ?? 0)) {
+        byHeight.set(h, f);
+      }
     }
 
-    console.log(`[tiktok] yt-dlp 输出长度: ${raw.length} 字节`);
-    const data: YtdlpOutput = JSON.parse(raw);
-    console.log(`[tiktok] 解析到 id=${data.id} title="${data.title}" formats=${data.formats?.length ?? 0}`);
+    const streams: VideoStream[] = [];
+    for (const [h, f] of [...byHeight.entries()].sort((a, b) => b[0] - a[0])) {
+      const label = h >= 1080 ? "1080P" : h >= 720 ? "720P" : h >= 480 ? "480P" : h > 0 ? `${h}P` : "原画";
+      streams.push({
+        quality: label,
+        label,
+        url: f.url!,
+        mimeType: f.mimeType?.split(";")[0] ?? "video/mp4",
+        width: f.width ?? undefined,
+        height: f.height ?? undefined,
+        bitrate: f.bitrate ?? undefined,
+        formatId: String(f.itag),
+      });
+    }
+
+    // 如果没有按高度的流，用 url 字段（TikTok 有时直接给单一 url）
+    if (streams.length === 0 && info.formats[0]?.url) {
+      streams.push({
+        quality: "original",
+        label: "原画",
+        url: info.formats[0].url,
+        mimeType: "video/mp4",
+      });
+    }
+
+    console.log(`[tiktok] 解析成功 title="${videoDetails.title.slice(0, 30)}" streams=${streams.length}`);
 
     return {
-      id: data.id ?? url,
-      title: data.title ?? "TikTok 视频",
-      cover: data.thumbnail ?? "",
-      duration: Math.floor(data.duration ?? 0),
-      author: data.uploader ?? "未知作者",
+      id: videoDetails.videoId,
+      title: videoDetails.title,
+      cover: videoDetails.thumbnails.at(-1)?.url ?? "",
+      duration: Number(videoDetails.lengthSeconds),
+      author: videoDetails.author.name,
       platform: "tiktok",
-      streams: buildStreams(data),
+      streams,
       rawUrl: url,
     };
   },
 };
 
-export { runYtdlp };
+// 保留旧的 runYtdlp 导出兼容性（douyin.ts 曾 import 它）
+export function runYtdlp(_args: string[], _proxy?: string): Promise<string> {
+  return Promise.reject(new Error("yt-dlp 在 Vercel 环境中不可用"));
+}

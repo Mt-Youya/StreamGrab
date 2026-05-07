@@ -1,6 +1,6 @@
 # StreamGrab
 
-多平台无水印视频下载器，支持 Bilibili、抖音、TikTok、YouTube。
+多平台无水印视频下载器，支持 Bilibili、抖音、TikTok、YouTube。已支持部署到 **Vercel**。
 
 ## 功能特性
 
@@ -9,9 +9,10 @@
 - 🎯 **画质自由选择**：所有可用画质一览，锁定画质有权限提示
 - 🎞️ **格式选择**：MP4、MKV、WebM（平台支持情况不同）
 - 🔐 **B站扫码登录**：扫码解锁 1080P+/4K 高清画质
-- 📱 **自动化认证**：抖音无需配置 Cookie，全自动处理
+- 📱 **抖音自动认证**：Browserless 或本地 Playwright，无需手动配置 Cookie
 - 📥 **下载队列**：实时进度显示
-- 🕒 **历史记录**：本地 SQLite 持久化
+- 🕒 **历史记录**：localStorage 本地存储
+- ☁️ **Vercel 兼容**：无需 yt-dlp / ffmpeg / 本地 Chromium
 
 ## 技术架构
 
@@ -20,19 +21,21 @@ streamgrab/
 ├── packages/
 │   ├── types/     — 共享类型定义
 │   ├── parsers/   — 各平台解析器（Bilibili/抖音/TikTok/YouTube）
-│   └── core/      — 调度器 + 下载管理
+│   └── core/      — 调度器
 └── apps/
     └── web/       — Next.js 15 前端应用
 ```
 
-## 各平台解析方案
+## 各平台技术方案
 
-| 平台 | 解析方式 | 说明 |
-|------|---------|------|
-| **Bilibili** | Playwright（stealth） + `window.__playinfo__` | 扫码登录后可下载 4K/1080P+ |
-| **抖音** | Playwright 拦截 detail API 响应 | 全自动，无需 Cookie |
-| **TikTok** | yt-dlp | 需要代理访问 |
-| **YouTube** | yt-dlp | H.264 优先（QuickTime 兼容）|
+| 平台 | 解析 | 下载 | Vercel 支持 |
+|------|------|------|------------|
+| **Bilibili** | 纯 HTTP API（WBI 签名）| 服务端 fetch + FFmpeg 合并（本地）/ 纯视频流（Vercel）| ✅ |
+| **抖音** | Browserless API 或本地 Playwright | 服务端直接透传 | ✅（需 BROWSERLESS_TOKEN）|
+| **TikTok** | `@distube/ytdl-core` | `ytdl` 流式下载 | ✅ |
+| **YouTube** | `@distube/ytdl-core` | `ytdl` 流式下载 + FFmpeg（本地）| ✅ |
+
+> ⚠️ Vercel 上没有 FFmpeg，B站和 YouTube 双流视频（视频+音频分离）无法合并，会降级为仅视频流（无声音）。本地部署可正常使用。
 
 ## 快速开始
 
@@ -40,8 +43,10 @@ streamgrab/
 
 - Node.js 18+
 - pnpm 8+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp)（用于 TikTok/YouTube 解析下载）
-- ffmpeg（用于 Bilibili 音视频合并）
+
+本地部署额外可选：
+- [ffmpeg](https://ffmpeg.org)（用于 B站/YouTube 音视频合并）
+- Playwright Chromium（用于抖音解析）：`npx playwright install chromium`
 
 ### 安装
 
@@ -49,22 +54,19 @@ streamgrab/
 git clone <repo>
 cd StreamGrab
 pnpm install
-npx playwright install chromium  # 安装无头浏览器
 ```
 
-### 配置
+### 本地配置
 
 ```bash
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-可配置项（均可选）：
-
 | 变量 | 说明 |
 |------|------|
-| `BILIBILI_COOKIE` | B站 SESSDATA（也可在设置页扫码登录） |
+| `BILIBILI_COOKIE` | B站 SESSDATA（可在设置页扫码登录替代）|
 | `HTTP_PROXY` | 代理地址，如 `http://127.0.0.1:7890` |
-| `YTDLP_PATH` | yt-dlp 路径（默认 `yt-dlp`） |
+| `BROWSERLESS_TOKEN` | 抖音解析所需（本地不需要，Vercel 需要）|
 
 ### 启动
 
@@ -73,40 +75,53 @@ pnpm dev
 # 访问 http://localhost:3000
 ```
 
+## Vercel 部署
+
+### 一键部署
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your/streamgrab)
+
+### 环境变量配置
+
+在 Vercel 控制台 → Settings → Environment Variables 添加：
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `BILIBILI_COOKIE` | 否 | B站 SESSDATA，不填最高 480P |
+| `BROWSERLESS_TOKEN` | 抖音功能必填 | [免费获取](https://browserless.io)（每月 6 小时）|
+
+### 平台限制说明
+
+| 平台 | Vercel 状态 | 备注 |
+|------|------------|------|
+| Bilibili | ✅ 正常 | 未登录最高 480P，登录可解锁 1080P+ |
+| 抖音 | ✅ 需配置 | 需要 BROWSERLESS_TOKEN |
+| TikTok | ✅ 正常 | 需要代理（国内限制）|
+| YouTube | ✅ 正常 | 双流视频无音频（Vercel 无 FFmpeg）|
+
 ## 使用说明
 
 ### 下载视频
 
 1. 粘贴视频链接（支持 Bilibili、抖音、TikTok、YouTube）
-2. 点击「解析」等待 10-15 秒
+2. 点击「解析」等待几秒
 3. 选择画质和输出格式
 4. 点击「下载」
 
 ### Bilibili 高清解锁
 
-1. 进入「设置」页面
-2. 点击「扫码登录」，用 B 站 App 扫描二维码
-3. 登录成功后可下载 1080P（普通账号）或 4K/HDR（大会员）
+进入「设置」→「扫码登录」，用 B 站 App 扫码后可下载 1080P（普通）/ 4K（大会员）。
 
 ### 格式说明
 
 | 格式 | 说明 |
 |------|------|
 | **MP4 / H.264** | 推荐，兼容 QuickTime、iOS、大多数播放器 |
-| **MKV** | 保留原始编码，文件更小但需专用播放器 |
-| **WebM** | 仅 YouTube/TikTok，VP9/AV1 编码 |
-
-> ⚠️ YouTube 2K 及以上画质使用 VP9 编码，macOS QuickTime 不支持，建议选 MKV 或改用 1080P。
+| **MKV** | 保留原始编码，文件更小 |
+| **WebM** | 仅 TikTok，VP9/AV1 编码（QuickTime 不支持）|
 
 ## 注意事项
 
 - 仅供个人学习研究使用
 - 请勿下载受版权保护的内容用于商业用途
-- 部分平台限制下载，请遵守平台使用协议
-
-## 开发计划
-
-- [ ] 改造为 Vercel 兼容版本（替换 Playwright/yt-dlp/FFmpeg 为纯 JS 方案）
-- [ ] YouTube 解析器迁移至 `@distube/ytdl-core`
-- [ ] 数据库迁移至 Vercel KV
-- [ ] 前端直接流式下载（解决服务端超时问题）
+- 请遵守各平台使用协议

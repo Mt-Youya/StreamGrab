@@ -9,6 +9,7 @@
     "lint": "biome lint ./app ./components ./lib"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@streamgrab/core": "workspace:*",
     "@streamgrab/parsers": "workspace:*",
     "@streamgrab/types": "workspace:*",
@@ -18,6 +19,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "next": "^16.2.4",
+    "playwright": "^1.59.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

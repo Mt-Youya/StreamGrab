@@ -1,72 +1,18 @@
 import type { IVideoParser, ParseOptions, VideoInfo } from "@streamgrab/types";
 
-const UA_MOBILE =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+/**
+ * 抖音解析器
+ *
+ * 本身不含浏览器逻辑，通过 options.browserFetch 接收外部浏览器调用结果。
+ * - 本地部署：由 apps/web/lib/douyin-browser.ts 提供 Playwright 实现
+ * - Vercel：由 apps/web/lib/douyin-browser.ts 提供 Browserless 实现
+ *
+ * 若 options.browserFetch 未提供，解析器直接报错提示配置方式。
+ */
 
-interface RouterData {
-  loaderData: {
-    "video_(id)/page": {
-      videoInfoRes: {
-        item_list: Array<{
-          aweme_id: string;
-          desc: string;
-          author: { nickname: string };
-          video: {
-            play_addr: { url_list: string[] };
-            cover: { url_list: string[] };
-            duration: number;
-            width: number;
-            height: number;
-          };
-        }>;
-      };
-    };
-  };
-}
-
-async function resolveVideoId(url: string): Promise<string> {
-  // 短链先重定向到 iesdouyin.com，从路径提取 video id
-  const resp = await fetch(url, {
-    redirect: "manual",
-    headers: { "User-Agent": UA_MOBILE },
-  });
-  const location = resp.headers.get("location") ?? "";
-  // iesdouyin.com/share/video/{id}/ 或 douyin.com/video/{id}
-  const m = location.match(/\/video\/(\d+)/);
-  if (m) return m[1]!;
-  // 直接从原始 URL 提取
-  const m2 = url.match(/\/video\/(\d+)/);
-  if (m2) return m2[1]!;
-  throw new Error("无法从抖音链接提取视频 ID");
-}
-
-async function fetchVideoInfo(videoId: string): Promise<RouterData["loaderData"]["video_(id)/page"]["videoInfoRes"]["item_list"][0]> {
-  const resp = await fetch(`https://www.iesdouyin.com/share/video/${videoId}/`, {
-    headers: {
-      "User-Agent": UA_MOBILE,
-      Referer: "https://www.iesdouyin.com",
-    },
-  });
-  const html = await resp.text();
-
-  const m = html.match(/window\._ROUTER_DATA\s*=\s*(\{.+)/);
-  if (!m) throw new Error("抖音页面结构变化，无法解析视频信息");
-
-  const raw = m[1]!;
-  let depth = 0;
-  let end = 0;
-  for (let i = 0; i < raw.length; i++) {
-    if (raw[i] === "{") depth++;
-    else if (raw[i] === "}") {
-      depth--;
-      if (depth === 0) { end = i + 1; break; }
-    }
-  }
-
-  const data: RouterData = JSON.parse(raw.slice(0, end));
-  const items = data.loaderData["video_(id)/page"]?.videoInfoRes?.item_list;
-  if (!items?.length) throw new Error("抖音返回的视频列表为空");
-  return items[0]!;
+export interface DouyinParseOptions extends ParseOptions {
+  /** 外部传入的浏览器抓取函数，返回 aweme/detail API 的 JSON 响应体 */
+  browserFetch?: (videoId: string) => Promise<string>;
 }
 
 export const douyinParser: IVideoParser = {
@@ -76,39 +22,75 @@ export const douyinParser: IVideoParser = {
     return /douyin\.com/.test(url) || /v\.douyin\.com/.test(url);
   },
 
-  async parse(url: string, _options: ParseOptions): Promise<VideoInfo> {
+  async parse(url: string, options: ParseOptions): Promise<VideoInfo> {
+    const opts = options as DouyinParseOptions;
     console.log(`[douyin] 开始解析 url="${url}"`);
 
-    const videoId = await resolveVideoId(url);
-    console.log(`[douyin] 解析到 videoId=${videoId}`);
+    // 处理短链
+    let resolvedUrl = url;
+    if (/v\.douyin\.com/.test(url)) {
+      const r = await fetch(url, { method: "HEAD", redirect: "manual" }).catch(() => null);
+      const loc = r?.headers.get("location");
+      if (loc) resolvedUrl = loc;
+    }
 
-    const item = await fetchVideoInfo(videoId);
+    const videoIdMatch = resolvedUrl.match(/video\/(\d+)/);
+    if (!videoIdMatch) throw new Error("无法从抖音 URL 提取视频 ID");
+    const videoId = videoIdMatch[1];
 
-    const playUrls = item.video.play_addr.url_list;
-    if (!playUrls.length) throw new Error("未获取到视频播放地址");
+    if (!opts.browserFetch) {
+      throw new Error(
+        "抖音解析需要浏览器支持。\n" +
+        "• Vercel 部署：在 Vercel 控制台添加环境变量 BROWSERLESS_TOKEN（免费获取：https://browserless.io）\n" +
+        "• 本地部署：已自动支持，无需额外配置"
+      );
+    }
 
-    // playwm（带水印）→ play（无水印）
-    const noWatermarkUrl = playUrls[0]!.replace("/playwm/", "/play/");
+    const rawBody = await opts.browserFetch(videoId);
+    const json = JSON.parse(rawBody) as {
+      aweme_detail?: {
+        aweme_id?: string;
+        desc?: string;
+        duration?: number;
+        author?: { nickname?: string };
+        video?: {
+          cover?: { url_list?: string[] };
+          play_addr?: { url_list?: string[] };
+          play_addr_h264?: { url_list?: string[] };
+          width?: number;
+          height?: number;
+        };
+      };
+    };
 
-    console.log(`[douyin] 解析成功 title="${item.desc.slice(0, 30)}"`);
+    if (!json.aweme_detail) throw new Error("抖音 API 未返回视频数据");
+    const d = json.aweme_detail;
+    const video = d.video;
+
+    const playUrls =
+      (video?.play_addr?.url_list?.length ?? 0) > 0
+        ? video!.play_addr!.url_list!
+        : (video?.play_addr_h264?.url_list ?? []);
+
+    if (playUrls.length === 0) throw new Error("无法获取视频播放地址");
+
+    console.log(`[douyin] 解析成功 title="${(d.desc ?? "").slice(0, 30)}" urls=${playUrls.length}`);
 
     return {
-      id: item.aweme_id,
-      title: item.desc || "抖音视频",
-      cover: item.video.cover.url_list[0] ?? "",
-      duration: Math.floor((item.video.duration ?? 0) / 1000),
-      author: item.author.nickname ?? "未知作者",
+      id: d.aweme_id ?? videoId,
+      title: d.desc ?? "抖音视频",
+      cover: video?.cover?.url_list?.[0] ?? "",
+      duration: Math.floor((d.duration ?? 0) / 1000),
+      author: d.author?.nickname ?? "未知作者",
       platform: "douyin",
-      streams: [
-        {
-          quality: "original",
-          label: "原画无水印",
-          url: noWatermarkUrl,
-          mimeType: "video/mp4",
-          width: item.video.width,
-          height: item.video.height,
-        },
-      ],
+      streams: playUrls.slice(0, 3).map((u, i) => ({
+        quality: i === 0 ? "original" : `original_${i}`,
+        label: i === 0 ? "原画无水印" : `备用线路 ${i}`,
+        url: u,
+        mimeType: "video/mp4",
+        width: video?.width,
+        height: video?.height,
+      })),
       rawUrl: url,
     };
   },

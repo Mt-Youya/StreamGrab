@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@streamgrab/types", "@streamgrab/core", "@streamgrab/parsers"],
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["playwright", "@distube/ytdl-core", "better-sqlite3"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.bilibili.com" },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dispatch, findParser } from "@streamgrab/core";
 import type { ParseApiResponse, VideoInfo } from "@streamgrab/types";
+import { loadBilibiliSession } from "@/lib/bilibili-browser";
+import { douyinBrowserFetch } from "@/lib/douyin-browser";
 
 export async function POST(req: NextRequest) {
   const startAt = Date.now();
@@ -34,11 +36,22 @@ export async function POST(req: NextRequest) {
     }
     console.log(`[parse] 匹配解析器: platform=${matched.platform}`);
 
+    // B站：优先用请求传来的 cookie，其次读 server session，最后用环境变量
+    let resolvedCookie = cookie ?? process.env["BILIBILI_COOKIE"];
+    if (!resolvedCookie && /bilibili\.com|BV[a-zA-Z0-9]{10}/.test(trimmedUrl)) {
+      const session = loadBilibiliSession();
+      if (session) {
+        resolvedCookie = session.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+        console.log(`[parse] 使用已登录 B站 session cookie`);
+      }
+    }
+
     const opts = {
-      // B站：优先用请求传来的 cookie，其次用环境变量
-      cookie: cookie ?? process.env["BILIBILI_COOKIE"],
+      cookie: resolvedCookie,
       proxy: proxy ?? process.env["HTTP_PROXY"],
       ytdlpPath: ytdlpPath ?? process.env["YTDLP_PATH"] ?? "yt-dlp",
+      // 抖音：注入浏览器抓取函数（Browserless 或本地 Playwright）
+      ...(matched.platform === "douyin" ? { browserFetch: douyinBrowserFetch } : {}),
     };
 
     const videoInfo: VideoInfo = await dispatch(trimmedUrl, opts);
