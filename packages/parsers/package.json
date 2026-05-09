@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
-    "youtubei.js": "^13.0.0",
-    "undici": "^7.25.0",
-    "@streamgrab/types": "workspace:*"
+    "@streamgrab/types": "workspace:*",
+    "undici": "^8.2.0",
+    "youtubei.js": "^17.0.1"
   }
 }

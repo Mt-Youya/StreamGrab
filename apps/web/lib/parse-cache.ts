@@ -14,9 +14,9 @@ import type { VideoInfo } from "@streamgrab/types";
 // ── Key 标准化 ──────────────────────────────────────────────
 const ID_PATTERNS: Record<string, RegExp> = {
   bilibili: /(?:BV|bv)([a-zA-Z0-9]{10})/,
-  douyin:   /video\/(\d+)/,
-  tiktok:   /video\/(\d+)/,
-  youtube:  /(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/,
+  douyin: /video\/(\d+)/,
+  tiktok: /video\/(\d+)/,
+  youtube: /(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/,
 };
 
 function buildCacheKey(url: string, platform: string): string {
@@ -30,13 +30,19 @@ function ttlFor(platform: string): number {
 }
 
 // ── 进程内 Map 后端（本地 / Vercel 无 KV 时）──────────────
-interface CacheEntry { info: VideoInfo; expiresAt: number }
+interface CacheEntry {
+  info: VideoInfo;
+  expiresAt: number;
+}
 const _memCache = new Map<string, CacheEntry>();
 
 function memGet(key: string): VideoInfo | null {
   const entry = _memCache.get(key);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { _memCache.delete(key); return null; }
+  if (Date.now() > entry.expiresAt) {
+    _memCache.delete(key);
+    return null;
+  }
   return entry.info;
 }
 
@@ -61,7 +67,9 @@ function makeRedisClient() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Redis } = require(/* webpackIgnore: true */ pkgName);
       return { type: "upstash", client: new Redis() };
-    } catch { /* 未安装，跳过 */ }
+    } catch {
+      /* 未安装，跳过 */
+    }
   }
   // ioredis：需要 REDIS_URL
   if (process.env["REDIS_URL"]) {
@@ -70,7 +78,9 @@ function makeRedisClient() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Redis = require(/* webpackIgnore: true */ pkgName);
       return { type: "ioredis", client: new Redis(process.env["REDIS_URL"]) };
-    } catch { /* 未安装，跳过 */ }
+    } catch {
+      /* 未安装，跳过 */
+    }
   }
   return null;
 }
@@ -81,11 +91,13 @@ async function kvGet(key: string): Promise<VideoInfo | null> {
   if (!_redis) return null;
   try {
     if (_redis.type === "upstash") {
-      return await _redis.client.get(key) as VideoInfo | null;
+      return (await _redis.client.get(key)) as VideoInfo | null;
     }
     const raw = await _redis.client.get(key);
-    return raw ? JSON.parse(raw) as VideoInfo : null;
-  } catch { return null; }
+    return raw ? (JSON.parse(raw) as VideoInfo) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function kvSet(key: string, info: VideoInfo, ttl: number): Promise<void> {
@@ -96,14 +108,18 @@ async function kvSet(key: string, info: VideoInfo, ttl: number): Promise<void> {
     } else {
       await _redis.client.set(key, JSON.stringify(info), "EX", ttl);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function kvDelete(key: string): Promise<void> {
   if (!_redis) return;
   try {
     await _redis.client.del(key);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ── 公开 API ─────────────────────────────────────────────

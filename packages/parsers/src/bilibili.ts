@@ -9,9 +9,9 @@ interface WbiKeys {
 }
 
 const MIX_KEY_ENC_TAB = [
-  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29,
-  28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25,
-  54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41,
+  13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34,
+  44, 52,
 ];
 
 function getMixinKey(orig: string): string {
@@ -132,7 +132,10 @@ export const bilibiliParser: IVideoParser = {
 
     console.log(`[bilibili] view API code=${viewJson.code}`);
     if (viewJson.code !== 0 || !viewJson.data) {
-      console.error(`[bilibili] view API 失败: code=${viewJson.code}，完整响应:`, JSON.stringify(viewJson).slice(0, 300));
+      console.error(
+        `[bilibili] view API 失败: code=${viewJson.code}，完整响应:`,
+        JSON.stringify(viewJson).slice(0, 300)
+      );
       throw new Error(`Bilibili API 错误: ${viewJson.code}`);
     }
 
@@ -168,7 +171,14 @@ export const bilibiliParser: IVideoParser = {
       code?: number;
       data?: {
         dash?: {
-          video?: Array<{ id: number; baseUrl: string; bandwidth: number; width: number; height: number; mimeType: string }>;
+          video?: Array<{
+            id: number;
+            baseUrl: string;
+            bandwidth: number;
+            width: number;
+            height: number;
+            mimeType: string;
+          }>;
           audio?: Array<{ id: number; baseUrl: string; bandwidth: number; mimeType: string }>;
         };
         durl?: Array<{ url: string; size: number }>;
@@ -179,13 +189,18 @@ export const bilibiliParser: IVideoParser = {
 
     console.log(`[bilibili] playurl API code=${playJson.code}`);
     if (playJson.code !== 0 || !playJson.data) {
-      console.error(`[bilibili] playurl API 失败: code=${playJson.code}，完整响应:`, JSON.stringify(playJson).slice(0, 300));
+      console.error(
+        `[bilibili] playurl API 失败: code=${playJson.code}，完整响应:`,
+        JSON.stringify(playJson).slice(0, 300)
+      );
       throw new Error(`Bilibili 播放地址获取失败: ${playJson.code}`);
     }
 
     const streams: VideoStream[] = [];
     const { dash, durl, accept_quality } = playJson.data;
-    console.log(`[bilibili] 响应格式: dash=${!!dash} durl=${!!durl} dash.video数量=${dash?.video?.length ?? 0} accept_quality=${accept_quality?.join(",")}`);
+    console.log(
+      `[bilibili] 响应格式: dash=${!!dash} durl=${!!durl} dash.video数量=${dash?.video?.length ?? 0} accept_quality=${accept_quality?.join(",")}`
+    );
 
     if (dash?.video && dash.audio) {
       const bestAudio = dash.audio.reduce((a, b) => (a.bandwidth > b.bandwidth ? a : b));

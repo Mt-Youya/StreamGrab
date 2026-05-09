@@ -23,10 +23,7 @@ export async function POST(req: NextRequest) {
     console.log(`[parse] 收到请求 url="${url}"`);
 
     if (!url || typeof url !== "string") {
-      return NextResponse.json<ParseApiResponse>(
-        { success: false, error: "缺少视频 URL" },
-        { status: 400 }
-      );
+      return NextResponse.json<ParseApiResponse>({ success: false, error: "缺少视频 URL" }, { status: 400 });
     }
 
     const trimmedUrl = url.trim();
@@ -74,15 +71,21 @@ export async function POST(req: NextRequest) {
       try {
         console.log(`[parse] 尝试代理解析 proxy=${resolvedProxy}`);
         videoInfo = await dispatch(trimmedUrl, { ...baseOpts, proxy: resolvedProxy });
-        console.log(`[parse] 代理解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`);
+        console.log(
+          `[parse] 代理解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`
+        );
       } catch (proxyErr) {
         console.warn(`[parse] 代理解析失败（${(proxyErr as Error).message}），回退直链重试...`);
         videoInfo = await dispatch(trimmedUrl, { ...baseOpts, proxy: undefined });
-        console.log(`[parse] 直链解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`);
+        console.log(
+          `[parse] 直链解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`
+        );
       }
     } else {
       videoInfo = await dispatch(trimmedUrl, baseOpts);
-      console.log(`[parse] 解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`);
+      console.log(
+        `[parse] 解析成功 title="${videoInfo.title}" streams=${videoInfo.streams.length} 耗时=${Date.now() - startAt}ms`
+      );
     }
 
     // ── 解析成功后写入缓存 ──
@@ -101,7 +104,7 @@ async function parseTikTok(
   url: string,
   proxy: string | undefined,
   baseOpts: Record<string, unknown>,
-  startAt: number,
+  startAt: number
 ): Promise<VideoInfo> {
   const videoId = url.match(/\/video\/(\d+)/)?.[1] ?? "";
 
@@ -154,7 +157,7 @@ async function parseDouyin(
   url: string,
   proxy: string | undefined,
   baseOpts: Record<string, unknown>,
-  startAt: number,
+  startAt: number
 ): Promise<VideoInfo> {
   // 层①：Playwright/Browserless 走代理（有代理时）
   if (proxy) {

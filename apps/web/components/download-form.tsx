@@ -10,8 +10,8 @@ import { Loader2, Search } from "lucide-react";
 
 // 各平台预计解析耗时提示
 const PLATFORM_HINT: Record<string, string> = {
-  tiktok:  "解析中... TikTok 需要绕过 Cloudflare 挑战，约 30~40 秒",
-  douyin:  "解析中... 抖音需要浏览器渲染，约 10~15 秒",
+  tiktok: "解析中... TikTok 需要绕过 Cloudflare 挑战，约 30~40 秒",
+  douyin: "解析中... 抖音需要浏览器渲染，约 10~15 秒",
   youtube: "解析中...",
   bilibili: "解析中...",
 };
@@ -93,15 +93,9 @@ export function DownloadForm() {
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       {loading && loadingPlatform && PLATFORM_HINT[loadingPlatform] && (
-        <p className="text-xs text-muted-foreground animate-pulse">
-          {PLATFORM_HINT[loadingPlatform]}
-        </p>
+        <p className="text-xs text-muted-foreground animate-pulse">{PLATFORM_HINT[loadingPlatform]}</p>
       )}
-      {!loading && (
-        <p className="text-xs text-muted-foreground">
-          支持平台：Bilibili · 抖音 · TikTok · YouTube
-        </p>
-      )}
+      {!loading && <p className="text-xs text-muted-foreground">支持平台：Bilibili · 抖音 · TikTok · YouTube</p>}
     </div>
   );
 }

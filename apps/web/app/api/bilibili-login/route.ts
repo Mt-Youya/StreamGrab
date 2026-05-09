@@ -39,15 +39,18 @@ export async function POST(req: NextRequest) {
       const result = await pollQrcodeStatus(qrcode_key);
       if (result.status === "confirmed" && result.cookieStr) {
         // 把 cookie 字符串转成对象数组存储
-        const cookies = result.cookieStr.split(";").map((c) => {
-          const [name, ...rest] = c.trim().split("=");
-          return {
-            name: name?.trim() ?? "",
-            value: rest.join("="),
-            domain: ".bilibili.com",
-            path: "/",
-          };
-        }).filter((c) => c.name);
+        const cookies = result.cookieStr
+          .split(";")
+          .map((c) => {
+            const [name, ...rest] = c.trim().split("=");
+            return {
+              name: name?.trim() ?? "",
+              value: rest.join("="),
+              domain: ".bilibili.com",
+              path: "/",
+            };
+          })
+          .filter((c) => c.name);
         saveBilibiliSession(cookies);
       }
       return NextResponse.json({ success: true, status: result.status });

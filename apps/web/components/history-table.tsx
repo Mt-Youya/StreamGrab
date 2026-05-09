@@ -30,7 +30,9 @@ export function HistoryTable() {
     setRecords(listHistory(platform || undefined));
   }, [platform]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   function handleDelete(id: string) {
     deleteHistory(id);
@@ -43,9 +45,7 @@ export function HistoryTable() {
     load();
   }
 
-  const filtered = records.filter((r) =>
-    r.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = records.filter((r) => r.title.toLowerCase().includes(search.toLowerCase()));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -70,11 +70,15 @@ export function HistoryTable() {
         </div>
         <Select
           value={platform}
-          onChange={(e) => { setPlatform(e.target.value as Platform | ""); }}
+          onChange={(e) => {
+            setPlatform(e.target.value as Platform | "");
+          }}
           className="w-36"
         >
           {PLATFORMS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
           ))}
         </Select>
         <Button variant="outline" size="icon" onClick={load}>
@@ -117,18 +121,25 @@ export function HistoryTable() {
               {filtered.map((record) => (
                 <tr key={record.id} className="hover:bg-muted/30 transition-colors">
                   <td className="p-3">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(record.id)}
-                      onChange={() => toggleSelect(record.id)}
-                    />
+                    <input type="checkbox" checked={selected.has(record.id)} onChange={() => toggleSelect(record.id)} />
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-3">
                       {record.cover && (
                         <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
                           <Image
-                            src={(() => { try { const s = JSON.parse(localStorage.getItem("streamgrab_settings") ?? "{}") as Record<string,string>; const p = s["httpProxy"] ? `&proxy=${encodeURIComponent(s["httpProxy"])}` : ""; return `/api/proxy?url=${encodeURIComponent(record.cover)}${p}`; } catch { return `/api/proxy?url=${encodeURIComponent(record.cover)}`; } })()}
+                            src={(() => {
+                              try {
+                                const s = JSON.parse(localStorage.getItem("streamgrab_settings") ?? "{}") as Record<
+                                  string,
+                                  string
+                                >;
+                                const p = s["httpProxy"] ? `&proxy=${encodeURIComponent(s["httpProxy"])}` : "";
+                                return `/api/proxy?url=${encodeURIComponent(record.cover)}${p}`;
+                              } catch {
+                                return `/api/proxy?url=${encodeURIComponent(record.cover)}`;
+                              }
+                            })()}
                             alt=""
                             fill
                             className="object-cover"
@@ -140,24 +151,15 @@ export function HistoryTable() {
                     </div>
                   </td>
                   <td className="p-3 hidden sm:table-cell">
-                    <Badge className={PLATFORM_COLORS[record.platform]}>
-                      {PLATFORM_LABELS[record.platform]}
-                    </Badge>
+                    <Badge className={PLATFORM_COLORS[record.platform]}>{PLATFORM_LABELS[record.platform]}</Badge>
                   </td>
                   <td className="p-3 hidden md:table-cell text-muted-foreground">{record.quality}</td>
-                  <td className="p-3 hidden md:table-cell text-muted-foreground">
-                    {formatFileSize(record.size)}
-                  </td>
+                  <td className="p-3 hidden md:table-cell text-muted-foreground">{formatFileSize(record.size)}</td>
                   <td className="p-3 hidden lg:table-cell text-muted-foreground text-xs">
                     {new Date(record.createdAt).toLocaleString("zh-CN")}
                   </td>
                   <td className="p-3 text-center">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleDelete(record.id)}
-                    >
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(record.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </td>

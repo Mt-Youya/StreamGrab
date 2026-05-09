@@ -35,15 +35,13 @@ export const youtubeParser: IVideoParser = {
     // 动态 import，让 serverExternalPackages 生效（不被 Next.js bundle）
     const { Innertube } = await import("youtubei.js");
 
-    const videoId = url.match(
-      /(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/
-    )?.[1];
+    const videoId = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
     if (!videoId) throw new Error("无法从 URL 提取 YouTube 视频 ID");
 
     // 依次尝试多个 client，直到拿到 streaming_data
     // TV_EMBEDDED / IOS 不需要 PO Token，规避 Vercel IP bot 检测
     const CLIENTS = ["TV_EMBEDDED", "IOS", "ANDROID", "WEB"] as const;
-    type YTClient = typeof CLIENTS[number];
+    type YTClient = (typeof CLIENTS)[number];
 
     /** 创建 Innertube（注入 fetch）并遍历 CLIENTS 尝试获取 streaming_data */
     async function tryInnertube(fetchFn?: typeof fetch) {
@@ -56,7 +54,7 @@ export const youtubeParser: IVideoParser = {
       let lastErr: Error | null = null;
       for (const client of CLIENTS) {
         try {
-          const candidate = await ytInstance.getInfo(videoId!, client as YTClient);
+          const candidate = await ytInstance.getInfo(videoId!, { client: client as YTClient });
           if (candidate.streaming_data) {
             result = candidate;
             console.log(`[youtube] client=${client} 获取流成功`);
@@ -84,7 +82,7 @@ export const youtubeParser: IVideoParser = {
       // undici@5 不接受 Request 对象，需要解包成 URL 字符串 + init
       const proxyFetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
         let url: string;
-        let mergedInit: Record<string, unknown> = { ...(init as object ?? {}) };
+        let mergedInit: Record<string, unknown> = { ...((init as object) ?? {}) };
         if (typeof input === "string") {
           url = input;
         } else if (input instanceof URL) {
@@ -100,10 +98,13 @@ export const youtubeParser: IVideoParser = {
             ...mergedInit,
           };
         }
-        return undiciFetch(url as Parameters<typeof undiciFetch>[0], {
-          ...mergedInit,
-          dispatcher: proxyAgent,
-        } as Parameters<typeof undiciFetch>[1]);
+        return undiciFetch(
+          url as Parameters<typeof undiciFetch>[0],
+          {
+            ...mergedInit,
+            dispatcher: proxyAgent,
+          } as Parameters<typeof undiciFetch>[1]
+        );
       }) as unknown as typeof fetch;
 
       try {
@@ -112,7 +113,9 @@ export const youtubeParser: IVideoParser = {
         console.log(`[youtube] 代理解析成功`);
       } catch (proxyErr) {
         const e = proxyErr as Error & { cause?: Error };
-        console.warn(`[youtube] 代理解析失败（${e.message}${e.cause ? " / " + e.cause.message : ""}），回退直链重试...`);
+        console.warn(
+          `[youtube] 代理解析失败（${e.message}${e.cause ? " / " + e.cause.message : ""}），回退直链重试...`
+        );
         info = await tryInnertube();
         console.log(`[youtube] 直链解析成功`);
       }
@@ -130,20 +133,14 @@ export const youtubeParser: IVideoParser = {
     const adaptiveFormats = streamingData.adaptive_formats ?? [];
 
     // 视频流（仅视频）
-    const videoFormats = adaptiveFormats.filter(
-      (f) => f.has_video && !f.has_audio && f.url
-    );
+    const videoFormats = adaptiveFormats.filter((f) => f.has_video && !f.has_audio && f.url);
 
     // 音频流（选最高码率）
-    const audioFormats = adaptiveFormats.filter(
-      (f) => !f.has_video && f.has_audio && f.url
-    );
-    const bestAudio = audioFormats.sort(
-      (a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0)
-    )[0];
+    const audioFormats = adaptiveFormats.filter((f) => !f.has_video && f.has_audio && f.url);
+    const bestAudio = audioFormats.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0];
 
     // 按画质分组，同画质优先 H.264
-    const byHeight = new Map<number, typeof videoFormats[0]>();
+    const byHeight = new Map<number, (typeof videoFormats)[0]>();
     for (const f of videoFormats) {
       const h = f.height ?? 0;
       const existing = byHeight.get(h);
@@ -170,9 +167,12 @@ export const youtubeParser: IVideoParser = {
         height: h,
         bitrate: f.bitrate ?? undefined,
         audioUrl: bestAudio?.url,
-        formatId: itag !== undefined && audioItag !== undefined
-          ? `${itag}+${audioItag}`
-          : itag !== undefined ? String(itag) : undefined,
+        formatId:
+          itag !== undefined && audioItag !== undefined
+            ? `${itag}+${audioItag}`
+            : itag !== undefined
+              ? String(itag)
+              : undefined,
       });
     }
 

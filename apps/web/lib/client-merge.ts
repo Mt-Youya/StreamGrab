@@ -48,30 +48,33 @@ export async function clientMergeAndDownload(opts: ClientMergeOptions): Promise<
   onProgress?.(0.1);
   // 通过服务端代理 fetch，避免 CORS 问题
   const proxy = (url: string) => `/api/proxy?url=${encodeURIComponent(url)}`;
-  const [videoData, audioData] = await Promise.all([
-    fetchFile(proxy(videoUrl)),
-    fetchFile(proxy(audioUrl)),
-  ]);
+  const [videoData, audioData] = await Promise.all([fetchFile(proxy(videoUrl)), fetchFile(proxy(audioUrl))]);
   onProgress?.(0.5);
 
   await ffmpeg.writeFile("video.mp4", videoData);
   await ffmpeg.writeFile("audio.m4a", audioData);
 
   await ffmpeg.exec([
-    "-i", "video.mp4",
-    "-i", "audio.m4a",
-    "-c:v", "copy",
-    "-c:a", "aac",
-    "-movflags", "+faststart",
+    "-i",
+    "video.mp4",
+    "-i",
+    "audio.m4a",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-movflags",
+    "+faststart",
     "output.mp4",
   ]);
   onProgress?.(0.95);
 
   const data = await ffmpeg.readFile("output.mp4");
   // ffmpeg.readFile 返回 Uint8Array | string，统一转为 ArrayBuffer
-  const arrayBuf = data instanceof Uint8Array
-    ? data.buffer.slice(0) as ArrayBuffer  // slice(0) 得到普通 ArrayBuffer
-    : new TextEncoder().encode(data as string).buffer as ArrayBuffer;
+  const arrayBuf =
+    data instanceof Uint8Array
+      ? (data.buffer.slice(0) as ArrayBuffer) // slice(0) 得到普通 ArrayBuffer
+      : (new TextEncoder().encode(data as string).buffer as ArrayBuffer);
   const blob = new Blob([arrayBuf], { type: "video/mp4" });
   const url = URL.createObjectURL(blob);
 

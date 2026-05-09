@@ -15,9 +15,9 @@ const DESKTOP_UA =
 
 const PLATFORM_HEADERS: Record<string, Record<string, string>> = {
   bilibili: { Referer: "https://www.bilibili.com", "User-Agent": DESKTOP_UA },
-  douyin:   { Referer: "https://www.douyin.com",   "User-Agent": DESKTOP_UA },
-  tiktok:   { Referer: "https://www.tiktok.com",   "User-Agent": DESKTOP_UA },
-  youtube:  { Referer: "https://www.youtube.com",  "User-Agent": DESKTOP_UA },
+  douyin: { Referer: "https://www.douyin.com", "User-Agent": DESKTOP_UA },
+  tiktok: { Referer: "https://www.tiktok.com", "User-Agent": DESKTOP_UA },
+  youtube: { Referer: "https://www.youtube.com", "User-Agent": DESKTOP_UA },
 };
 
 function detectPlatformFromUrl(url: string): Platform {
@@ -34,7 +34,7 @@ async function downloadToTmp(
   headers: Record<string, string>,
   suffix: string,
   onProgress?: (downloaded: number, total: number) => void,
-  proxy?: string,
+  proxy?: string
 ): Promise<string> {
   const tmpPath = path.join(os.tmpdir(), `sg_${uuidv4()}${suffix}`);
 
@@ -91,7 +91,7 @@ async function downloadWithFallback(
   headers: Record<string, string>,
   suffix: string,
   onProgress?: (downloaded: number, total: number) => void,
-  proxy?: string,
+  proxy?: string
 ): Promise<string> {
   if (proxy) {
     try {
@@ -109,16 +109,26 @@ async function downloadWithFallback(
   return downloadToTmp(url, headers, suffix, onProgress, undefined);
 }
 
-
 function mergeWithFFmpeg(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffmpeg", [
-      "-y", "-i", videoPath, "-i", audioPath,
-      "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart",
+      "-y",
+      "-i",
+      videoPath,
+      "-i",
+      audioPath,
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-movflags",
+      "+faststart",
       outputPath,
     ]);
     let stderr = "";
-    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
     proc.on("close", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`FFmpeg 退出码 ${code}: ${stderr.slice(-300)}`));
@@ -160,7 +170,9 @@ export async function POST(req: NextRequest) {
     const headers = PLATFORM_HEADERS[platform] ?? PLATFORM_HEADERS["bilibili"]!;
     const dlFilename = safeFilename.endsWith(outputExt) ? safeFilename : safeFilename + outputExt;
 
-    console.log(`[download] platform=${platform} hasAudio=${!!audioUrl} filename=${safeFilename} proxy=${proxy ?? "无"}`);
+    console.log(
+      `[download] platform=${platform} hasAudio=${!!audioUrl} filename=${safeFilename} proxy=${proxy ?? "无"}`
+    );
 
     // ── YouTube：streamUrl/audioUrl 已是 googlevideo 直链，走代理直接下载 ──
     if (platform === "youtube") {
@@ -172,19 +184,38 @@ export async function POST(req: NextRequest) {
       try {
         if (audioUrl) {
           // 视频流 + 音频流，FFmpeg 合并
-          let videoTotal = 0, audioTotal = 0, videoDl = 0, audioDl = 0;
+          let videoTotal = 0,
+            audioTotal = 0,
+            videoDl = 0,
+            audioDl = 0;
           function refreshProgress() {
             const total = videoTotal + audioTotal;
             if (total <= 0) return;
             setProgress(id, Math.min(Math.round(((videoDl + audioDl) / total) * 50) + 5, 55));
           }
           const [videoPath, audioPath] = await Promise.all([
-            downloadWithFallback(streamUrl, ytHeaders, videoTmpExt, (dl, total) => {
-              videoDl = dl; videoTotal = total || videoTotal; refreshProgress();
-            }, proxy),
-            downloadWithFallback(audioUrl, ytHeaders, ".audio.m4a", (dl, total) => {
-              audioDl = dl; audioTotal = total || audioTotal; refreshProgress();
-            }, proxy),
+            downloadWithFallback(
+              streamUrl,
+              ytHeaders,
+              videoTmpExt,
+              (dl, total) => {
+                videoDl = dl;
+                videoTotal = total || videoTotal;
+                refreshProgress();
+              },
+              proxy
+            ),
+            downloadWithFallback(
+              audioUrl,
+              ytHeaders,
+              ".audio.m4a",
+              (dl, total) => {
+                audioDl = dl;
+                audioTotal = total || audioTotal;
+                refreshProgress();
+              },
+              proxy
+            ),
           ]);
           tmpFiles.push(videoPath, audioPath);
           setProgress(id, 60);
@@ -197,20 +228,29 @@ export async function POST(req: NextRequest) {
             const buf = fs.readFileSync(outputPath);
             setStatus(id, "done");
             setProgress(id, 100);
-            tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+            tmpFiles.forEach((f) => {
+              try {
+                fs.unlinkSync(f);
+              } catch {}
+            });
             return new NextResponse(buf, {
               headers: {
                 "Content-Type": `video/${outputFormat}`,
                 "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
                 "Content-Length": String(buf.byteLength),
-                "X-Task-Id": id, "X-Platform": platform,
+                "X-Task-Id": id,
+                "X-Platform": platform,
               },
             });
           } catch (ffErr) {
             if ((ffErr as Error).message === "FFMPEG_NOT_FOUND") {
               console.warn("[download] FFmpeg 不可用，通知前端进行客户端合并");
               setStatus(id, "done");
-              tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+              tmpFiles.forEach((f) => {
+                try {
+                  fs.unlinkSync(f);
+                } catch {}
+              });
               return NextResponse.json({
                 needsClientMerge: true,
                 videoUrl: streamUrl,
@@ -229,13 +269,18 @@ export async function POST(req: NextRequest) {
           const buf = fs.readFileSync(videoPath);
           setStatus(id, "done");
           setProgress(id, 100);
-          tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+          tmpFiles.forEach((f) => {
+            try {
+              fs.unlinkSync(f);
+            } catch {}
+          });
           return new NextResponse(buf, {
             headers: {
               "Content-Type": `video/${outputFormat}`,
               "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
               "Content-Length": String(buf.byteLength),
-              "X-Task-Id": id, "X-Platform": platform,
+              "X-Task-Id": id,
+              "X-Platform": platform,
             },
           });
         }
@@ -250,7 +295,10 @@ export async function POST(req: NextRequest) {
     if (audioUrl) {
       setProgress(id, 5);
       // 视频+音频并发下载，实时合并进度映射到 5%~55%
-      let videoTotal = 0, audioTotal = 0, videoDl = 0, audioDl = 0;
+      let videoTotal = 0,
+        audioTotal = 0,
+        videoDl = 0,
+        audioDl = 0;
       function refreshProgress() {
         const total = videoTotal + audioTotal;
         if (total <= 0) return;
@@ -260,12 +308,28 @@ export async function POST(req: NextRequest) {
       let videoPath: string, audioPath: string;
       try {
         [videoPath, audioPath] = await Promise.all([
-          downloadWithFallback(streamUrl, headers, videoTmpExt, (dl, total) => {
-            videoDl = dl; videoTotal = total || videoTotal; refreshProgress();
-          }, proxy),
-          downloadWithFallback(audioUrl, headers, ".audio.m4a", (dl, total) => {
-            audioDl = dl; audioTotal = total || audioTotal; refreshProgress();
-          }, proxy),
+          downloadWithFallback(
+            streamUrl,
+            headers,
+            videoTmpExt,
+            (dl, total) => {
+              videoDl = dl;
+              videoTotal = total || videoTotal;
+              refreshProgress();
+            },
+            proxy
+          ),
+          downloadWithFallback(
+            audioUrl,
+            headers,
+            ".audio.m4a",
+            (dl, total) => {
+              audioDl = dl;
+              audioTotal = total || audioTotal;
+              refreshProgress();
+            },
+            proxy
+          ),
         ]);
         tmpFiles.push(videoPath, audioPath);
       } catch (err) {
@@ -284,7 +348,11 @@ export async function POST(req: NextRequest) {
         if (msg === "FFMPEG_NOT_FOUND") {
           // Vercel 无 FFmpeg：通知前端用 ffmpeg-wasm 在浏览器端合并
           setStatus(id, "done");
-          tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+          tmpFiles.forEach((f) => {
+            try {
+              fs.unlinkSync(f);
+            } catch {}
+          });
           return NextResponse.json({
             needsClientMerge: true,
             videoUrl: streamUrl,
@@ -299,8 +367,13 @@ export async function POST(req: NextRequest) {
       }
       setProgress(id, 90);
       const outputBuf = fs.readFileSync(outputPath);
-      setStatus(id, "done"); setProgress(id, 100);
-      tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+      setStatus(id, "done");
+      setProgress(id, 100);
+      tmpFiles.forEach((f) => {
+        try {
+          fs.unlinkSync(f);
+        } catch {}
+      });
       return new NextResponse(outputBuf, {
         headers: {
           "Content-Type": `video/${outputFormat}`,
@@ -316,9 +389,15 @@ export async function POST(req: NextRequest) {
       // 有代理：代理优先下载到临时文件，失败自动回退直链
       let videoPath: string;
       try {
-        videoPath = await downloadWithFallback(streamUrl, headers, outputExt, (dl, total) => {
-          if (total > 0) setProgress(id, Math.round((dl / total) * 100));
-        }, proxy);
+        videoPath = await downloadWithFallback(
+          streamUrl,
+          headers,
+          outputExt,
+          (dl, total) => {
+            if (total > 0) setProgress(id, Math.round((dl / total) * 100));
+          },
+          proxy
+        );
       } catch (err) {
         const msg = `网络请求失败: ${(err as Error).message}`;
         setStatus(id, "error", msg);
@@ -326,8 +405,13 @@ export async function POST(req: NextRequest) {
       }
       tmpFiles.push(videoPath);
       const buf = fs.readFileSync(videoPath);
-      setStatus(id, "done"); setProgress(id, 100);
-      tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+      setStatus(id, "done");
+      setProgress(id, 100);
+      tmpFiles.forEach((f) => {
+        try {
+          fs.unlinkSync(f);
+        } catch {}
+      });
       return new NextResponse(buf, {
         headers: {
           "Content-Type": `video/${outputFormat}`,
@@ -364,8 +448,13 @@ export async function POST(req: NextRequest) {
       }
       tmpFiles.push(videoPath);
       const buf = fs.readFileSync(videoPath);
-      setStatus(id, "done"); setProgress(id, 100);
-      tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+      setStatus(id, "done");
+      setProgress(id, 100);
+      tmpFiles.forEach((f) => {
+        try {
+          fs.unlinkSync(f);
+        } catch {}
+      });
       return new NextResponse(buf, {
         headers: {
           "Content-Type": `video/${outputFormat}`,
@@ -389,7 +478,8 @@ export async function POST(req: NextRequest) {
             downloaded += value.byteLength;
             if (contentLength > 0) setProgress(id, Math.round((downloaded / contentLength) * 100));
           }
-          setStatus(id, "done"); setProgress(id, 100);
+          setStatus(id, "done");
+          setProgress(id, 100);
           controller.close();
         } catch (err) {
           setStatus(id, "error", (err as Error).message);
@@ -407,7 +497,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+    tmpFiles.forEach((f) => {
+      try {
+        fs.unlinkSync(f);
+      } catch {}
+    });
     console.error("[download] unexpected error:", err);
 
     // 流地址失效时清除解析缓存，下次强制重新解析

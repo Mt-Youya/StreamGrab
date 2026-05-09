@@ -7,8 +7,9 @@ export interface TikTokParseOptions extends ParseOptions {
 }
 
 const BROWSER_HEADERS: Record<string, string> = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.9",
   "Sec-Fetch-Dest": "document",
   "Sec-Fetch-Mode": "navigate",
@@ -45,7 +46,9 @@ export async function tiktokHttpFetch(videoId: string, videoUrl: string, proxy: 
       if (detail?.["itemInfo"]) {
         return JSON.stringify({ itemInfo: detail["itemInfo"] });
       }
-    } catch { /* 继续尝试其他格式 */ }
+    } catch {
+      /* 继续尝试其他格式 */
+    }
     return match[1];
   }
 
@@ -89,8 +92,8 @@ export const tiktokParser: IVideoParser = {
     if (!opts.browserFetch) {
       throw new Error(
         "TikTok 解析需要浏览器支持（Cloudflare 防护无法绕过纯 HTTP 请求）。\n" +
-        "• Vercel 部署：在 Vercel 控制台添加环境变量 BROWSERLESS_TOKEN（免费获取：https://browserless.io）\n" +
-        "• 本地部署：已自动支持，无需额外配置"
+          "• Vercel 部署：在 Vercel 控制台添加环境变量 BROWSERLESS_TOKEN（免费获取：https://browserless.io）\n" +
+          "• 本地部署：已自动支持，无需额外配置"
       );
     }
 
@@ -231,7 +234,8 @@ function buildFromAwemeDetail(d: Record<string, unknown>, videoId: string, rawUr
   const video = d["video"] as Record<string, unknown> | undefined;
   const desc = String(d["desc"] ?? "TikTok 视频");
   const author = (d["author"] as Record<string, unknown> | undefined)?.["nickname"] ?? "未知作者";
-  const cover = ((video?.["cover"] as Record<string, unknown> | undefined)?.["url_list"] as string[] | undefined)?.[0] ?? "";
+  const cover =
+    ((video?.["cover"] as Record<string, unknown> | undefined)?.["url_list"] as string[] | undefined)?.[0] ?? "";
   const duration = Math.floor(Number(d["duration"] ?? 0) / 1000);
 
   const playUrls = (video?.["play_addr"] as Record<string, unknown> | undefined)?.["url_list"] as string[] | undefined;

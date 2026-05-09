@@ -25,15 +25,26 @@ function loadSettings(): Settings {
 
 type BiliLoginState = "idle" | "loading" | "qrcode" | "scanned" | "confirmed" | "error";
 
-interface SysFeature { ok: boolean; note: string; install?: string }
+interface SysFeature {
+  ok: boolean;
+  note: string;
+  install?: string;
+}
 interface SysCheck {
   isVercel: boolean;
-  deps: { ffmpeg: { available: boolean; version?: string }; playwright: { available: boolean }; browserlessToken: boolean };
+  deps: {
+    ffmpeg: { available: boolean; version?: string };
+    playwright: { available: boolean };
+    browserlessToken: boolean;
+  };
   features: Record<string, SysFeature>;
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({ httpProxy: "http://127.0.0.1:7897", ytdlpPath: "yt-dlp" });
+  const [settings, setSettings] = useState<Settings>({
+    httpProxy: "http://127.0.0.1:7897",
+    ytdlpPath: "yt-dlp",
+  });
   const [saved, setSaved] = useState(false);
   const [sysCheck, setSysCheck] = useState<SysCheck | null>(null);
 
@@ -82,7 +93,12 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "generate" }),
       });
-      const data = (await resp.json()) as { success: boolean; url?: string; qrcode_key?: string; error?: string };
+      const data = (await resp.json()) as {
+        success: boolean;
+        url?: string;
+        qrcode_key?: string;
+        error?: string;
+      };
       if (!data.success || !data.url || !data.qrcode_key) {
         throw new Error(data.error ?? "生成二维码失败");
       }
@@ -170,15 +186,18 @@ export default function SettingsPage() {
         <CardContent>
           {!sysCheck ? (
             <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" />检测中...
+              <Loader2 className="h-3 w-3 animate-spin" />
+              检测中...
             </p>
           ) : (
             <div className="space-y-2">
               {Object.entries(sysCheck.features).map(([key, f]) => (
                 <div key={key} className="flex items-start gap-2 text-sm">
-                  {f.ok
-                    ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
-                    : <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />}
+                  {f.ok ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  )}
                   <div>
                     <span className="font-medium">{FEATURE_LABELS[key] ?? key}</span>
                     <span className="text-muted-foreground ml-2">{f.note}</span>
@@ -244,8 +263,8 @@ export default function SettingsPage() {
                 {biliState === "qrcode" || biliState === "scanned"
                   ? "等待扫码..."
                   : biliState === "loading"
-                  ? "生成中..."
-                  : "扫码登录"}
+                    ? "生成中..."
+                    : "扫码登录"}
               </Button>
             )}
             {(biliState === "error" || (biliState === "qrcode" && !biliLoggedIn)) && (
@@ -255,18 +274,14 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {biliState === "error" && (
-            <p className="text-xs text-destructive">{biliMsg}</p>
-          )}
+          {biliState === "error" && <p className="text-xs text-destructive">{biliMsg}</p>}
           {biliState === "confirmed" && (
             <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <CheckCircle className="h-3 w-3" /> {biliMsg}
             </p>
           )}
           {biliState === "idle" && !biliLoggedIn && !biliMsg && (
-            <p className="text-xs text-muted-foreground">
-              不登录也可以解析，只是画质最高到 480P。
-            </p>
+            <p className="text-xs text-muted-foreground">不登录也可以解析，只是画质最高到 480P。</p>
           )}
         </CardContent>
       </Card>
@@ -278,7 +293,8 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            抖音解析完全自动化——粘贴链接后，系统会启动无头浏览器自动处理所有签名和认证，无需配置 Cookie，每次解析约需 10–15 秒。下载的视频均为无水印版本。
+            抖音解析完全自动化——粘贴链接后，系统会启动无头浏览器自动处理所有签名和认证，无需配置 Cookie，每次解析约需
+            10–15 秒。下载的视频均为无水印版本。
           </p>
         </CardContent>
       </Card>
@@ -296,9 +312,7 @@ export default function SettingsPage() {
               onChange={(e) => update("httpProxy", e.target.value)}
               placeholder="http://127.0.0.1:7897"
             />
-            <p className="text-xs text-muted-foreground">
-              TikTok 和 YouTube 需要通过代理访问。
-            </p>
+            <p className="text-xs text-muted-foreground">TikTok 和 YouTube 需要通过代理访问。</p>
           </div>
         </CardContent>
       </Card>

@@ -11,10 +11,7 @@
 import type { BrowserContext } from "playwright";
 
 /** TikTok 视频详情 API 的 URL 关键词，用于拦截响应（备用） */
-const DETAIL_API_PATTERNS = [
-  "/api/item/detail/",
-  "/aweme/v1/web/aweme/detail/",
-];
+const DETAIL_API_PATTERNS = ["/api/item/detail/", "/aweme/v1/web/aweme/detail/"];
 
 export async function tiktokBrowserFetch(videoId: string, videoUrl: string, proxy?: string): Promise<string> {
   const token = process.env["BROWSERLESS_TOKEN"];
@@ -111,7 +108,12 @@ async function getSharedContext(proxy?: string): Promise<BrowserContext> {
   // 检查缓存
   const cached = _contextCache.get(key);
   if (cached) {
-    try { cached.pages(); return cached; } catch { _contextCache.delete(key); }
+    try {
+      cached.pages();
+      return cached;
+    } catch {
+      _contextCache.delete(key);
+    }
   }
 
   // 正在初始化则等待
@@ -136,7 +138,8 @@ async function getSharedContext(proxy?: string): Promise<BrowserContext> {
     }
 
     const context = await browser.newContext({
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       locale: "en-US",
       timezoneId: "America/New_York",
       viewport: { width: 1280, height: 800 },
@@ -155,7 +158,9 @@ async function getSharedContext(proxy?: string): Promise<BrowserContext> {
       delete (window as any).__pw_manual;
     });
 
-    browser.on("disconnected", () => { _contextCache.delete(key); });
+    browser.on("disconnected", () => {
+      _contextCache.delete(key);
+    });
     _contextCache.set(key, context);
     _contextInitLock.delete(key);
     return context;
@@ -174,7 +179,7 @@ async function fetchViaLocalPlaywright(_videoId: string, videoUrl: string, proxy
   page.on("response", async (resp) => {
     if (detailBody) return;
     const url = resp.url();
-    if (!DETAIL_API_PATTERNS.some(p => url.includes(p))) return;
+    if (!DETAIL_API_PATTERNS.some((p) => url.includes(p))) return;
     try {
       const body = await resp.text();
       if (body.includes("itemStruct") || body.includes("aweme_detail") || body.includes("playAddr")) {

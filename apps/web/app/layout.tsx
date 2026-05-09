@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Navigation } from "@/components/navigation";
 import { Analytics } from "@vercel/analytics/next";
+import Script from "next/script";
 
 // 使用系统字体，避免 Google Fonts 网络依赖
 const inter = { className: "font-sans" };
@@ -16,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('sg-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()` }} />
+        <Script id="theme-init" strategy="beforeInteractive" src="/theme-init.js" />
       </head>
       <body className={`${inter.className} min-h-screen bg-background antialiased`}>
         <Providers>

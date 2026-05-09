@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyRequest } from "@streamgrab/parsers";
 
 const ALLOWED_HOSTS = [
-  "bilivideo.com", "bilivideo.cn", "hdslb.com",
-  "douyinvod.com", "douyinpic.com", "douyinstatic.com",
-  "tiktokcdn.com", "tiktokcdn-us.com", "tiktokv.com",
-  "googlevideo.com", "ytimg.com",
+  "bilivideo.com",
+  "bilivideo.cn",
+  "hdslb.com",
+  "douyinvod.com",
+  "douyinpic.com",
+  "douyinstatic.com",
+  "tiktokcdn.com",
+  "tiktokcdn-us.com",
+  "tiktokv.com",
+  "googlevideo.com",
+  "ytimg.com",
 ];
 
 function isAllowed(url: string): boolean {
@@ -35,7 +42,8 @@ function getReferer(url: string): string {
   return "";
 }
 
-const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 export async function GET(req: NextRequest) {
   const target = req.nextUrl.searchParams.get("url");
@@ -57,7 +65,10 @@ export async function GET(req: NextRequest) {
   try {
     if (httpProxy) {
       // 走代理：CONNECT 隧道（正确处理 HTTPS）
-      const { status, headers, buffer } = await proxyRequest(target, httpProxy, { headers: reqHeaders, timeout: 10000 });
+      const { status, headers, buffer } = await proxyRequest(target, httpProxy, {
+        headers: reqHeaders,
+        timeout: 10000,
+      });
       if (status < 200 || status >= 300) {
         return NextResponse.json({ error: `上游请求失败: ${status}` }, { status });
       }

@@ -41,8 +41,8 @@ export const douyinParser: IVideoParser = {
     if (!opts.browserFetch) {
       throw new Error(
         "抖音解析需要浏览器支持。\n" +
-        "• Vercel 部署：在 Vercel 控制台添加环境变量 BROWSERLESS_TOKEN（免费获取：https://browserless.io）\n" +
-        "• 本地部署：已自动支持，无需额外配置"
+          "• Vercel 部署：在 Vercel 控制台添加环境变量 BROWSERLESS_TOKEN（免费获取：https://browserless.io）\n" +
+          "• 本地部署：已自动支持，无需额外配置"
       );
     }
 

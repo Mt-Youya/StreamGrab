@@ -44,25 +44,14 @@ function TaskRow({ taskId }: { taskId: string }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{task.filename}</p>
         {task.status === "downloading" && <Progress value={task.progress} className="mt-1 h-1.5" />}
-        {task.status === "error" && (
-          <p className="text-xs text-destructive mt-0.5">{task.error ?? "下载失败"}</p>
-        )}
+        {task.status === "error" && <p className="text-xs text-destructive mt-0.5">{task.error ?? "下载失败"}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {task.status === "pending" && (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        )}
-        {task.status === "downloading" && (
-          <span className="text-xs text-muted-foreground">{task.progress}%</span>
-        )}
+        {task.status === "pending" && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {task.status === "downloading" && <span className="text-xs text-muted-foreground">{task.progress}%</span>}
         {task.status === "done" && <CheckCircle className="h-4 w-4 text-green-500" />}
         {task.status === "error" && <XCircle className="h-4 w-4 text-destructive" />}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => removeFromQueue(task.taskId)}
-        >
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeFromQueue(task.taskId)}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>

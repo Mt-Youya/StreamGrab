@@ -14,10 +14,7 @@ export function createTask(taskId: string, filename: string): DownloadTask {
   return task;
 }
 
-export function updateTask(
-  taskId: string,
-  update: Partial<Pick<DownloadTask, "status" | "progress" | "error">>
-): void {
+export function updateTask(taskId: string, update: Partial<Pick<DownloadTask, "status" | "progress" | "error">>): void {
   const task = tasks.get(taskId);
   if (!task) return;
   Object.assign(task, update);

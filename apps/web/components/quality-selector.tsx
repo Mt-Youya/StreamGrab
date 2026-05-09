@@ -16,9 +16,7 @@ const FORMAT_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: "mp4", label: "MP4（推荐）" },
     { value: "mkv", label: "MKV" },
   ],
-  douyin: [
-    { value: "mp4", label: "MP4" },
-  ],
+  douyin: [{ value: "mp4", label: "MP4" }],
   tiktok: [
     { value: "mp4", label: "MP4（推荐）" },
     { value: "mkv", label: "MKV" },
@@ -185,7 +183,8 @@ export function QualitySelector() {
       >
         {video.streams.map((stream, i) => (
           <option key={i} value={i}>
-            {stream.locked ? "🔒 " : ""}{stream.label}
+            {stream.locked ? "🔒 " : ""}
+            {stream.label}
             {stream.size ? ` (${formatFileSize(stream.size)})` : ""}
           </option>
         ))}
@@ -193,13 +192,11 @@ export function QualitySelector() {
 
       {/* 格式选择 */}
       {!isLocked && formatOptions.length > 1 && (
-        <Select
-          value={outputFormat}
-          onChange={(e) => setOutputFormat(e.target.value)}
-          className="w-52"
-        >
+        <Select value={outputFormat} onChange={(e) => setOutputFormat(e.target.value)} className="w-52">
           {formatOptions.map((f) => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
           ))}
         </Select>
       )}
@@ -211,12 +208,20 @@ export function QualitySelector() {
         className="gap-2"
         variant={isLocked ? "outline" : "default"}
       >
-        {isLocked ? <Lock className="h-4 w-4" /> : mergeProgress > 0 ? <Cpu className="h-4 w-4 animate-pulse" /> : <Download className="h-4 w-4" />}
+        {isLocked ? (
+          <Lock className="h-4 w-4" />
+        ) : mergeProgress > 0 ? (
+          <Cpu className="h-4 w-4 animate-pulse" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
         {mergeProgress > 0
           ? `浏览器合并中 ${Math.round(mergeProgress * 100)}%`
-          : downloading ? "下载中..."
-          : isLocked ? "需要权限"
-          : "下载"}
+          : downloading
+            ? "下载中..."
+            : isLocked
+              ? "需要权限"
+              : "下载"}
       </Button>
 
       {/* 分辨率提示 */}
@@ -228,16 +233,12 @@ export function QualitySelector() {
 
       {/* 客户端合并提示 */}
       {mergeProgress > 0 && (
-        <span className="text-xs text-blue-600 dark:text-blue-400">
-          正在浏览器中合并音视频，请稍候...
-        </span>
+        <span className="text-xs text-blue-600 dark:text-blue-400">正在浏览器中合并音视频，请稍候...</span>
       )}
 
       {/* 锁定提示 */}
       {isLocked && selected?.lockReason && (
-        <span className="text-xs text-amber-600 dark:text-amber-400">
-          {selected.lockReason}
-        </span>
+        <span className="text-xs text-amber-600 dark:text-amber-400">{selected.lockReason}</span>
       )}
     </div>
   );

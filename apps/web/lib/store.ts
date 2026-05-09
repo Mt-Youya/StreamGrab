@@ -19,14 +19,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   setCurrentVideo: (video) => set({ currentVideo: video }),
 
-  addToQueue: (task) =>
-    set((state) => ({ downloadQueue: [...state.downloadQueue, task] })),
+  addToQueue: (task) => set((state) => ({ downloadQueue: [...state.downloadQueue, task] })),
 
   updateTaskInQueue: (taskId, update) =>
     set((state) => ({
-      downloadQueue: state.downloadQueue.map((t) =>
-        t.taskId === taskId ? { ...t, ...update } : t
-      ),
+      downloadQueue: state.downloadQueue.map((t) => (t.taskId === taskId ? { ...t, ...update } : t)),
     })),
 
   removeFromQueue: (taskId) =>

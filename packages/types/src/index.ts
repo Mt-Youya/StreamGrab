@@ -35,6 +35,9 @@ export interface ParseOptions {
   proxy?: string;
   format?: string;
   ytdlpPath?: string;
+  // 浏览器抓取函数注入（抖音/TikTok 平台使用）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  browserFetch?: (...args: any[]) => Promise<string>;
 }
 
 export type DownloadStatus = "pending" | "downloading" | "done" | "error";

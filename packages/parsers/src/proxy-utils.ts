@@ -35,31 +35,38 @@ export async function proxyRequest(
 
   // "direct://" 或 undefined 表示不使用代理
   const isDirect = !proxy || proxy === "direct://";
-  const agent = isDirect ? undefined : new ProxyAgent({
-    uri: proxy,
-    requestTls: { rejectUnauthorized: false },
-    proxyTls: { rejectUnauthorized: false },
-    connectTimeout: timeout,
-  });
+  const agent = isDirect
+    ? undefined
+    : new ProxyAgent({
+        uri: proxy,
+        requestTls: { rejectUnauthorized: false },
+        proxyTls: { rejectUnauthorized: false },
+        connectTimeout: timeout,
+      });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await undiciFetch(targetUrl as RequestInfo, {
-      method,
-      headers: {
-        "Accept-Encoding": "gzip, deflate, br",
-        ...headers,
-      },
-      body: body ?? null,
-      dispatcher: agent,
-      signal: controller.signal,
-    } as RequestInit);
+    const res = await undiciFetch(
+      targetUrl as RequestInfo,
+      {
+        method,
+        headers: {
+          "Accept-Encoding": "gzip, deflate, br",
+          ...headers,
+        },
+        body: body ?? null,
+        dispatcher: agent,
+        signal: controller.signal,
+      } as RequestInit
+    );
 
     const buf = Buffer.from(await res.arrayBuffer());
     const respHeaders: Record<string, string> = {};
-    res.headers.forEach((v, k) => { respHeaders[k] = v; });
+    res.headers.forEach((v, k) => {
+      respHeaders[k] = v;
+    });
 
     return { status: res.status, headers: respHeaders, buffer: buf };
   } finally {
@@ -77,7 +84,7 @@ export async function proxyDownloadStream(
   proxy: string,
   headers: Record<string, string>,
   onData: (chunk: Buffer, total: number) => void,
-  timeout = 120000,
+  timeout = 120000
 ): Promise<void> {
   const agent = new ProxyAgent({
     uri: proxy,
@@ -90,13 +97,16 @@ export async function proxyDownloadStream(
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await undiciFetch(targetUrl as RequestInfo, {
-      method: "GET",
-      // 视频/音频流不加 Accept-Encoding，透传原始字节
-      headers,
-      dispatcher: agent,
-      signal: controller.signal,
-    } as RequestInit);
+    const res = await undiciFetch(
+      targetUrl as RequestInfo,
+      {
+        method: "GET",
+        // 视频/音频流不加 Accept-Encoding，透传原始字节
+        headers,
+        dispatcher: agent,
+        signal: controller.signal,
+      } as RequestInit
+    );
 
     if (!res.ok || !res.body) {
       throw new Error(`下载失败 ${res.status} ${res.statusText}`);
@@ -121,12 +131,10 @@ export async function proxyDownloadStream(
  */
 export function makeProxyFetch(proxy: string): typeof fetch {
   return async (input: globalThis.RequestInfo | URL, init?: globalThis.RequestInit): Promise<Response> => {
-    const url =
-      typeof input === "string" ? input
-      : input instanceof URL ? input.href
-      : (input as Request).url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
 
-    const method = (init?.method ?? (typeof input !== "string" && !(input instanceof URL) ? (input as Request).method : "GET")) as string;
+    const method = (init?.method ??
+      (typeof input !== "string" && !(input instanceof URL) ? (input as Request).method : "GET")) as string;
     const headers: Record<string, string> = {};
     if (init?.headers) {
       if (typeof (init.headers as { entries?: unknown }).entries === "function") {
@@ -147,15 +155,18 @@ export function makeProxyFetch(proxy: string): typeof fetch {
     });
 
     try {
-      const res = await undiciFetch(url as RequestInfo, {
-        method,
-        headers: {
-          "Accept-Encoding": "gzip, deflate, br",
-          ...headers,
-        },
-        body: body as RequestInit["body"],
-        dispatcher: agent,
-      } as RequestInit);
+      const res = await undiciFetch(
+        url as RequestInfo,
+        {
+          method,
+          headers: {
+            "Accept-Encoding": "gzip, deflate, br",
+            ...headers,
+          },
+          body: body as RequestInit["body"],
+          dispatcher: agent,
+        } as RequestInit
+      );
 
       const buf = await res.arrayBuffer();
       const resHeaders = new Headers();

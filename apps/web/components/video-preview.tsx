@@ -32,25 +32,15 @@ export function VideoPreview() {
         <div className="flex gap-0 sm:flex-row flex-col">
           <div className="relative aspect-video w-full sm:w-56 shrink-0 bg-muted">
             {coverSrc ? (
-              <Image
-                src={coverSrc}
-                alt={video.title}
-                fill
-                className="object-cover"
-                unoptimized
-              />
+              <Image src={coverSrc} alt={video.title} fill className="object-cover" unoptimized />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
-                无封面
-              </div>
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">无封面</div>
             )}
           </div>
           <div className="flex flex-col justify-between p-4 flex-1 min-w-0">
             <div className="space-y-2">
               <div className="flex items-start gap-2 flex-wrap">
-                <Badge className={PLATFORM_COLORS[video.platform]}>
-                  {PLATFORM_LABELS[video.platform]}
-                </Badge>
+                <Badge className={PLATFORM_COLORS[video.platform]}>{PLATFORM_LABELS[video.platform]}</Badge>
                 <Badge variant="outline">{video.streams.length} 种画质</Badge>
               </div>
               <h2 className="font-semibold text-base leading-snug line-clamp-2">{video.title}</h2>

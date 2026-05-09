@@ -14,7 +14,15 @@ const COOKIE_PATH = path.join(os.tmpdir(), "streamgrab_bilibili_cookies.json");
 const COOKIE_TTL_MS = 6 * 60 * 60 * 1000; // 6 小时
 
 interface CachedSession {
-  cookies: Array<{ name: string; value: string; domain: string; path: string; secure?: boolean; httpOnly?: boolean; sameSite?: "Strict" | "Lax" | "None" }>;
+  cookies: Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    secure?: boolean;
+    httpOnly?: boolean;
+    sameSite?: "Strict" | "Lax" | "None";
+  }>;
   savedAt: number;
 }
 
@@ -51,10 +59,9 @@ export function isLoggedIn(): boolean {
 
 /** 生成二维码 */
 export async function generateQrcode(): Promise<{ url: string; qrcode_key: string }> {
-  const resp = await fetch(
-    "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
-    { headers: { "User-Agent": UA, Referer: "https://www.bilibili.com" } }
-  );
+  const resp = await fetch("https://passport.bilibili.com/x/passport-login/web/qrcode/generate", {
+    headers: { "User-Agent": UA, Referer: "https://www.bilibili.com" },
+  });
   const json = (await resp.json()) as { code: number; data?: { url: string; qrcode_key: string } };
   if (json.code !== 0 || !json.data) throw new Error("生成二维码失败");
   return json.data;
@@ -64,10 +71,9 @@ export async function generateQrcode(): Promise<{ url: string; qrcode_key: strin
 export async function pollQrcodeStatus(
   qrcode_key: string
 ): Promise<{ status: "waiting" | "scanned" | "confirmed" | "expired"; cookieStr?: string }> {
-  const resp = await fetch(
-    `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${qrcode_key}`,
-    { headers: { "User-Agent": UA, Referer: "https://www.bilibili.com" } }
-  );
+  const resp = await fetch(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${qrcode_key}`, {
+    headers: { "User-Agent": UA, Referer: "https://www.bilibili.com" },
+  });
 
   // 从 Set-Cookie 头提取 cookie
   const rawSetCookie = resp.headers.get("set-cookie") ?? "";
