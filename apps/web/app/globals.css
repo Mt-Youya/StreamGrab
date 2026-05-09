@@ -1,52 +1,99 @@
 @import "tailwindcss";
 
+/* ── Light mode: Ice Surface system ─────────────────────── */
 @theme {
-  --color-background: hsl(0 0% 100%);
-  --color-foreground: hsl(222.2 84% 4.9%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(222.2 47.4% 11.2%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-secondary: hsl(210 40% 96.1%);
-  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
-  --color-muted: hsl(210 40% 96.1%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-accent: hsl(210 40% 96.1%);
-  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-border: hsl(214.3 31.8% 91.4%);
-  --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(222.2 84% 4.9%);
-  --radius: 0.5rem;
+  /* Backgrounds */
+  --color-background:          #f7f9fc;
+  --color-card:                #ffffff;
+
+  /* Foreground */
+  --color-foreground:          #0d1117;
+  --color-card-foreground:     #0d1117;
+
+  /* Primary action (inverted: dark bg + light text in light mode) */
+  --color-primary:             #0d1117;
+  --color-primary-foreground:  #f0f4fc;
+
+  /* Secondary / muted surfaces */
+  --color-secondary:           #edf0f5;
+  --color-secondary-foreground:#0d1117;
+  --color-muted:               #edf0f5;
+  --color-muted-foreground:    #637089;
+
+  /* Accent (repurposed as interactive hover surface, NOT aurora) */
+  --color-accent:              #edf0f5;
+  --color-accent-foreground:   #0d1117;
+
+  /* Semantic */
+  --color-destructive:         #d94f4f;
+  --color-destructive-foreground: #f0f4fc;
+
+  /* Borders & inputs */
+  --color-border:              #dde4ee;
+  --color-input:               #dde4ee;
+  --color-ring:                #637089;
+
+  /* Aurora accent (success / primary CTA hover) */
+  --color-aurora:              #4fffb0;
+
+  --radius: 0.375rem;
 }
 
+/* ── Dark mode: Extraction Engine depth stack ────────────── */
 .dark {
-  --color-background: hsl(222.2 84% 4.9%);
-  --color-foreground: hsl(210 40% 98%);
-  --color-card: hsl(222.2 84% 4.9%);
-  --color-card-foreground: hsl(210 40% 98%);
-  --color-primary: hsl(210 40% 98%);
-  --color-primary-foreground: hsl(222.2 47.4% 11.2%);
-  --color-secondary: hsl(217.2 32.6% 17.5%);
-  --color-secondary-foreground: hsl(210 40% 98%);
-  --color-muted: hsl(217.2 32.6% 17.5%);
-  --color-muted-foreground: hsl(215 20.2% 65.1%);
-  --color-accent: hsl(217.2 32.6% 17.5%);
-  --color-accent-foreground: hsl(210 40% 98%);
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-border: hsl(217.2 32.6% 17.5%);
-  --color-input: hsl(217.2 32.6% 17.5%);
-  --color-ring: hsl(212.7 26.8% 83.9%);
+  /* Backgrounds — 3-level depth stack, no shadows needed */
+  --color-background:          #0b0f1a;
+  --color-card:                #111827;
+
+  /* Foreground */
+  --color-foreground:          #f0f4fc;
+  --color-card-foreground:     #f0f4fc;
+
+  /* Primary action (light foreground as button bg in dark mode) */
+  --color-primary:             #f0f4fc;
+  --color-primary-foreground:  #0b0f1a;
+
+  /* Secondary / muted surfaces */
+  --color-secondary:           #1a2233;
+  --color-secondary-foreground:#f0f4fc;
+  --color-muted:               #1a2233;
+  --color-muted-foreground:    #637089;
+
+  /* Accent (surface-mid: activated nav items, hover backgrounds) */
+  --color-accent:              #1a2233;
+  --color-accent-foreground:   #f0f4fc;
+
+  /* Semantic */
+  --color-destructive:         #d94f4f;
+  --color-destructive-foreground: #f0f4fc;
+
+  /* Borders & inputs — grid lines, nearly invisible */
+  --color-border:              #1e2d45;
+  --color-input:               #111827;
+  --color-ring:                #637089;
+
+  /* Aurora accent */
+  --color-aurora:              #4fffb0;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    /* System font stack — best CJK rendering, no external dependency */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Mono font for data-density elements */
+  .font-mono {
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas,
+      "Courier New", monospace;
   }
 }

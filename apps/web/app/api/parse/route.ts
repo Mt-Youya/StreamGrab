@@ -7,6 +7,34 @@ import { tiktokBrowserFetch } from "@/lib/tiktok-browser";
 import { tiktokHttpFetch } from "@streamgrab/parsers";
 import { getCached, setCached } from "@/lib/parse-cache";
 
+/** 将底层技术错误消息翻译成用户可读的中文 */
+function translateParseError(msg: string): string {
+  // B站 API 错误码映射
+  if (msg.includes("Bilibili API 错误")) {
+    if (msg.includes("-404")) return "视频不存在或已被删除";
+    if (msg.includes("-403")) return "没有权限访问该视频，可能需要大会员";
+    if (msg.includes("-412")) return "请求过于频繁，请稍后再试";
+    if (msg.includes("-101")) return "账号未登录，请在设置页扫码登录";
+    if (msg.includes("-111")) return "账号被封禁";
+    if (msg.includes("62002")) return "视频已下线";
+    if (msg.includes("62004")) return "视频审核中，暂不可访问";
+    return "B站解析失败，请检查链接是否有效";
+  }
+  // Playwright / 浏览器相关
+  if (msg.includes("Executable doesn't exist") || msg.includes("playwright install")) {
+    return "本地 Chromium 未安装，请在设置页查看安装说明";
+  }
+  if (msg.includes("browserless")) {
+    return "云端浏览器连接失败，请检查 BROWSERLESS_TOKEN 环境变量";
+  }
+  // 网络超时
+  if (msg.includes("timeout") || msg.includes("ETIMEDOUT")) {
+    return "请求超时，请检查网络或代理设置后重试";
+  }
+  // 原样返回，但过滤掉技术堆栈信息（冒号后的英文错误）
+  return msg.length > 80 ? msg.slice(0, 80) + "…" : msg;
+}
+
 export async function POST(req: NextRequest) {
   const startAt = Date.now();
   let url = "<unknown>";
@@ -93,7 +121,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json<ParseApiResponse>({ success: true, data: videoInfo });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "解析失败";
+    const raw = err instanceof Error ? err.message : "解析失败";
+    const message = translateParseError(raw);
     console.error(`[parse] 解析失败 url="${url}" 耗时=${Date.now() - startAt}ms`, err);
     return NextResponse.json<ParseApiResponse>({ success: false, error: message }, { status: 500 });
   }

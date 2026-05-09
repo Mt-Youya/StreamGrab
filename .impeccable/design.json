@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-09T00:00:00Z",
+  "title": "Design System: StreamGrab",
+  "extensions": {
+    "colorMeta": {
+      "dark-bg":      { "role": "neutral", "displayName": "Extraction Ground",  "canonical": "oklch(0.13 0.025 258)", "tonalRamp": ["oklch(0.06 0.018 258)", "oklch(0.09 0.022 258)", "oklch(0.13 0.025 258)", "oklch(0.18 0.022 258)", "oklch(0.24 0.018 258)", "oklch(0.35 0.015 258)", "oklch(0.55 0.012 258)", "oklch(0.75 0.008 258)"] },
+      "surface":      { "role": "neutral", "displayName": "Surface Layer",      "canonical": "oklch(0.16 0.022 258)", "tonalRamp": ["oklch(0.09 0.018 258)", "oklch(0.13 0.022 258)", "oklch(0.16 0.022 258)", "oklch(0.20 0.020 258)", "oklch(0.26 0.018 258)", "oklch(0.36 0.015 258)", "oklch(0.56 0.012 258)", "oklch(0.76 0.008 258)"] },
+      "surface-mid":  { "role": "neutral", "displayName": "Surface Mid",        "canonical": "oklch(0.20 0.020 258)", "tonalRamp": ["oklch(0.10 0.016 258)", "oklch(0.14 0.020 258)", "oklch(0.17 0.020 258)", "oklch(0.20 0.020 258)", "oklch(0.27 0.018 258)", "oklch(0.38 0.015 258)", "oklch(0.58 0.010 258)", "oklch(0.78 0.007 258)"] },
+      "border":       { "role": "neutral", "displayName": "Grid Line",          "canonical": "oklch(0.22 0.018 258)", "tonalRamp": ["oklch(0.12 0.015 258)", "oklch(0.16 0.018 258)", "oklch(0.19 0.018 258)", "oklch(0.22 0.018 258)", "oklch(0.30 0.015 258)", "oklch(0.42 0.012 258)", "oklch(0.62 0.009 258)", "oklch(0.82 0.006 258)"] },
+      "text-base":    { "role": "neutral", "displayName": "Frost Text",         "canonical": "oklch(0.96 0.004 220)", "tonalRamp": ["oklch(0.30 0.012 220)", "oklch(0.45 0.010 220)", "oklch(0.60 0.008 220)", "oklch(0.72 0.006 220)", "oklch(0.82 0.005 220)", "oklch(0.90 0.004 220)", "oklch(0.94 0.004 220)", "oklch(0.96 0.004 220)"] },
+      "text-muted":   { "role": "neutral", "displayName": "Dim Text",           "canonical": "oklch(0.55 0.012 234)", "tonalRamp": ["oklch(0.20 0.018 234)", "oklch(0.30 0.016 234)", "oklch(0.40 0.014 234)", "oklch(0.55 0.012 234)", "oklch(0.68 0.009 234)", "oklch(0.78 0.007 234)", "oklch(0.87 0.005 234)", "oklch(0.93 0.003 234)"] },
+      "destructive":  { "role": "tertiary", "displayName": "Alert Red",         "canonical": "oklch(0.57 0.21 27)", "tonalRamp": ["oklch(0.22 0.18 27)", "oklch(0.32 0.20 27)", "oklch(0.42 0.21 27)", "oklch(0.50 0.22 27)", "oklch(0.57 0.21 27)", "oklch(0.65 0.18 27)", "oklch(0.74 0.14 27)", "oklch(0.85 0.09 27)"] },
+      "mono-accent":  { "role": "primary", "displayName": "Aurora Accent",      "canonical": "oklch(0.90 0.15 160)", "tonalRamp": ["oklch(0.25 0.12 160)", "oklch(0.38 0.14 160)", "oklch(0.50 0.16 160)", "oklch(0.62 0.17 160)", "oklch(0.72 0.17 160)", "oklch(0.80 0.16 160)", "oklch(0.87 0.15 160)", "oklch(0.90 0.15 160)"] },
+      "light-bg":     { "role": "neutral", "displayName": "Ice Surface",        "canonical": "oklch(0.98 0.003 220)", "tonalRamp": ["oklch(0.70 0.010 220)", "oklch(0.78 0.008 220)", "oklch(0.84 0.006 220)", "oklch(0.89 0.005 220)", "oklch(0.93 0.004 220)", "oklch(0.96 0.003 220)", "oklch(0.98 0.003 220)", "oklch(0.99 0.002 220)"] },
+      "light-border": { "role": "neutral", "displayName": "Slate Border",       "canonical": "oklch(0.91 0.012 228)", "tonalRamp": ["oklch(0.55 0.020 228)", "oklch(0.65 0.018 228)", "oklch(0.74 0.016 228)", "oklch(0.82 0.014 228)", "oklch(0.87 0.013 228)", "oklch(0.91 0.012 228)", "oklch(0.95 0.008 228)", "oklch(0.97 0.005 228)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "页面大标题，全局唯一一处，如品牌名 StreamGrab。" },
+      "title":   { "displayName": "Title",   "purpose": "区块标题、视频名称、重要状态标题。" },
+      "body":    { "displayName": "Body",    "purpose": "所有说明文字、错误消息、状态描述。最大行宽 65ch。" },
+      "label":   { "displayName": "Label (Mono)", "purpose": "数值型内容专用：文件大小、画质标签、进度百分比、时长。" }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "所有状态切换和颜色过渡的默认曲线。" },
+      { "name": "duration-fast",  "value": "120ms", "purpose": "按钮 hover/active、输入框 focus。" },
+      { "name": "duration-base",  "value": "200ms", "purpose": "导航项激活、进度条更新。" }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "首要操作，如「解析」「下载」。Frost Text 背景翻转，hover 切换到 Aurora Accent。",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/></svg> 解析</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; background: #f0f4fc; color: #0b0f1a; padding: 10px 20px; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; cursor: pointer; transition: background 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: #4fffb0; color: #0b0f1a; } .ds-btn-primary:focus-visible { outline: 2px solid #637089; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "导航项、次要操作、图标按钮。透明背景，hover 切换到 surface-mid。",
+      "html": "<button class=\"ds-btn-ghost\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0\"/><path d=\"M12 8v4l2 2\"/></svg> 历史记录</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: #637089; padding: 8px 12px; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; cursor: pointer; transition: background 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-ghost:hover { background: #1a2233; color: #f0f4fc; } .ds-btn-ghost:focus-visible { outline: 2px solid #637089; outline-offset: 2px; }"
+    },
+    {
+      "name": "URL Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "主下载输入框，高度 48px，Surface Layer 背景，Grid Line 边框。",
+      "html": "<input class=\"ds-input-url\" type=\"text\" placeholder=\"粘贴 Bilibili、抖音、TikTok 或 YouTube 视频链接...\">",
+      "css": ".ds-input-url { display: flex; width: 100%; height: 48px; background: #111827; color: #f0f4fc; border: 1px solid #1e2d45; border-radius: 6px; padding: 10px 12px; font-size: 1rem; line-height: 1.6; outline: none; transition: border-color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-input-url::placeholder { color: #637089; } .ds-input-url:focus { border-color: #637089; box-shadow: 0 0 0 2px rgba(99,112,137,0.25); } .ds-input-url:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Navigation Bar",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "粘性顶栏，深色毛玻璃背景，左侧 logo，右侧导航项 + 主题切换。",
+      "html": "<header class=\"ds-nav\"><a href=\"/\" class=\"ds-nav-logo\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7,10 12,15 17,10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/></svg> StreamGrab</a><nav class=\"ds-nav-items\"><a href=\"/\" class=\"ds-nav-item ds-nav-item--active\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7,10 12,15 17,10\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"/></svg> 下载</a><a href=\"/history\" class=\"ds-nav-item\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12,6 12,12 16,14\"/></svg> 历史记录</a><a href=\"/settings\" class=\"ds-nav-item\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14\"/></svg> 设置</a></nav></header>",
+      "css": ".ds-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(11,15,26,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid #1e2d45; } .ds-nav-logo { display: flex; align-items: center; gap: 8px; font-size: 1.125rem; font-weight: 700; color: #f0f4fc; text-decoration: none; letter-spacing: -0.01em; } .ds-nav-items { display: flex; align-items: center; gap: 2px; } .ds-nav-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; font-weight: 500; color: #637089; text-decoration: none; transition: background 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-nav-item:hover { background: #1a2233; color: #f0f4fc; } .ds-nav-item--active { background: #1a2233; color: #f0f4fc; }"
+    },
+    {
+      "name": "Download Form",
+      "kind": "custom",
+      "description": "主页核心组件：等高的 URL 输入框 + 解析按钮一排，错误消息内联，平台提示 mono 字体。",
+      "html": "<div class=\"ds-download-form\"><div class=\"ds-download-form__row\"><input class=\"ds-download-form__input\" type=\"text\" placeholder=\"粘贴 Bilibili、抖音、TikTok 或 YouTube 视频链接...\"><button class=\"ds-download-form__btn\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/></svg> 解析</button></div><p class=\"ds-download-form__hint\">支持平台：Bilibili · 抖音 · TikTok · YouTube</p></div>",
+      "css": ".ds-download-form { display: flex; flex-direction: column; gap: 8px; } .ds-download-form__row { display: flex; gap: 8px; } .ds-download-form__input { flex: 1; height: 48px; background: #111827; color: #f0f4fc; border: 1px solid #1e2d45; border-radius: 6px; padding: 10px 12px; font-size: 1rem; outline: none; transition: border-color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-download-form__input::placeholder { color: #637089; } .ds-download-form__input:focus { border-color: #637089; box-shadow: 0 0 0 2px rgba(99,112,137,0.25); } .ds-download-form__btn { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 10px 24px; background: #f0f4fc; color: #0b0f1a; border: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-download-form__btn:hover { background: #4fffb0; } .ds-download-form__hint { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #637089; letter-spacing: 0.02em; }"
+    },
+    {
+      "name": "Quality Badge",
+      "kind": "chip",
+      "description": "画质标签：1080P、4K、720P 等，等宽字体，选中态用 Aurora Accent 边框。",
+      "html": "<div class=\"ds-quality-badges\"><button class=\"ds-quality-badge ds-quality-badge--active\">4K</button><button class=\"ds-quality-badge\">1080P</button><button class=\"ds-quality-badge\">720P</button><button class=\"ds-quality-badge ds-quality-badge--locked\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/></svg> 4K HDR</button></div>",
+      "css": ".ds-quality-badges { display: flex; flex-wrap: wrap; gap: 6px; } .ds-quality-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #111827; color: #637089; border: 1px solid #1e2d45; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.02em; cursor: pointer; transition: border-color 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-quality-badge:hover { border-color: #637089; color: #f0f4fc; } .ds-quality-badge--active { border-color: #4fffb0; color: #4fffb0; background: rgba(79,255,176,0.06); } .ds-quality-badge--locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Extraction Engine",
+    "overview": "StreamGrab 的界面就是流程本身。没有装饰性元素，没有品牌 hero，没有引导用户「发现功能」的视觉技巧。界面存在的理由只有一个：让用户在 3 步之内从链接到文件。这是极客工具美学的核心承诺：用密度代替留白，用状态颜色代替装饰，用精确文字代替模糊图标。\n\n视觉系统建立在深海军蓝黑的基础上，每一个表面层级通过细微的亮度差异区分。没有阴影。没有渐变文字。颜色仅在表达状态语义时出现：错误用红，成功用淡绿（Aurora Accent），加载用脉冲动画，否则回到中性。\n\n这个系统明确拒绝的：下载网站的按钮轰炸和颜色混乱；SaaS landing page 的卡片堆叠和渐变 hero；以及任何让界面「显得有设计感」而非「完成任务」的装饰。",
+    "keyCharacteristics": [
+      "深色为第一公民，浅色为主题变体",
+      "等宽字体仅用于数字、文件大小、状态标签、进度等信息密度元素",
+      "颜色密度是唯一的状态分层手段：无阴影、无渐变",
+      "边框优于阴影：分割依赖 1px 低对比度线",
+      "主流程 CTA 对比度必须达到 AAA"
+    ],
+    "rules": [
+      { "name": "The No-Color Rule",       "body": "Aurora Accent 出现在 ≤5% 的像素上。它只标记成功和首要 CTA hover。任何其他颜色使用均为错误。", "section": "colors" },
+      { "name": "The Mono-Data Rule",      "body": "等宽字体仅用于数值型内容。用等宽字体写标题或说明文字是错误的。", "section": "typography" },
+      { "name": "The Flat-By-Default Rule","body": "任何试图加 box-shadow 的元素都需要质疑。层次关系先用 border 或背景色密度表达。阴影保留给真正脱离文档流的浮层。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 用颜色密度（亮度台阶）区分层次，而不是阴影",
+      "Do 用等宽字体（JetBrains Mono）展示所有数值：文件大小、画质、进度百分比、时长",
+      "Do 保持错误消息内联，紧跟出错的输入框",
+      "Do 让 Aurora Accent 只在成功状态和首要 CTA hover 时出现，总面积 ≤5%",
+      "Do 为主下载流程所有可操作控件保持 AAA 对比度",
+      "Do 用 backdrop-filter: blur(8px) + border-bottom 处理粘性导航，不加阴影"
+    ],
+    "donts": [
+      "Don't 引入下载网站气质：多余按钮、广告位颜色区块、超过 2 个 CTA 并排",
+      "Don't 用 SaaS 卡片堆叠：等高等宽 icon + 标题 + 文字的重复 grid，或渐变 hero",
+      "Don't 使用 background-clip: text 渐变文字",
+      "Don't 在卡片、列表项上使用大于 1px 的 border-left 彩色竖条",
+      "Don't 加 box-shadow，除非是真正脱离文档流的浮层",
+      "Don't 用 Aurora Accent 做 focus ring，成功色与焦点状态不能混用",
+      "Don't 用玻璃态作为装饰，唯一允许的 blur 是导航 backdrop-filter"
+    ]
+  }
+}

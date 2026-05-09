@@ -2,7 +2,7 @@
 所有回答都使用中文。无论上下文有多长都使用中文回答。
 Output with CHINESE.
 
-# CLAUDE.md
+# [CLAUDE.md](https://github.com/forrestchang/andrej-karpathy-skills/blob/main/CLAUDE.md)
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 

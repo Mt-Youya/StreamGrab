@@ -1,30 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { useAppStore } from "@/lib/store";
 import { sanitizeFilename, formatFileSize } from "@/lib/utils";
 import type { DownloadApiRequest } from "@streamgrab/types";
 import { v4 as uuidv4 } from "uuid";
-import { Download, Lock, Cpu } from "lucide-react";
+import { Download, Lock, Cpu, ChevronDown } from "lucide-react";
 import { insertHistory } from "@/lib/db";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 // 各平台支持的输出格式
 const FORMAT_OPTIONS: Record<string, { value: string; label: string }[]> = {
   bilibili: [
-    { value: "mp4", label: "MP4（推荐）" },
+    { value: "mp4", label: "MP4" },
     { value: "mkv", label: "MKV" },
   ],
   douyin: [{ value: "mp4", label: "MP4" }],
   tiktok: [
-    { value: "mp4", label: "MP4（推荐）" },
+    { value: "mp4", label: "MP4" },
     { value: "mkv", label: "MKV" },
     { value: "webm", label: "WebM" },
   ],
   youtube: [
-    { value: "mp4", label: "MP4 / H.264（QuickTime 兼容）" },
-    { value: "mkv", label: "MKV（保留原始编码）" },
+    { value: "mp4", label: "MP4" },
+    { value: "mkv", label: "MKV" },
     { value: "webm", label: "WebM" },
   ],
 };
@@ -35,15 +35,24 @@ export function QualitySelector() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [outputFormat, setOutputFormat] = useState("mp4");
   const [downloading, setDownloading] = useState(false);
-  const [mergeProgress, setMergeProgress] = useState(0); // 0 = 未合并，>0 = 合并中
+  const [mergeProgress, setMergeProgress] = useState(0);
+  const [lockedHint, setLockedHint] = useState<number | null>(null);
 
   if (!video || video.streams.length === 0) return null;
 
   const selected = video.streams[selectedIndex] ?? video.streams[0];
   const formatOptions = FORMAT_OPTIONS[video.platform] ?? FORMAT_OPTIONS["bilibili"];
+  const isLocked = !!selected?.locked;
+  const isBusy = downloading || mergeProgress > 0;
 
-  // 切换画质时重置格式为该平台默认值
   function handleQualityChange(idx: number) {
+    const stream = video!.streams[idx];
+    if (stream?.locked) {
+      setLockedHint(idx);
+      setSelectedIndex(idx);
+      return;
+    }
+    setLockedHint(null);
     setSelectedIndex(idx);
     setOutputFormat(formatOptions[0].value);
   }
@@ -90,13 +99,10 @@ export function QualitySelector() {
         body: JSON.stringify(body),
       });
 
-      if (!resp.ok) {
-        throw new Error("下载请求失败");
-      }
+      if (!resp.ok) throw new Error("下载请求失败");
 
       const contentType = resp.headers.get("content-type") ?? "";
 
-      // 服务端 FFmpeg 不可用时，返回 JSON 要求客户端合并
       if (contentType.includes("application/json")) {
         const json = (await resp.json()) as {
           needsClientMerge?: boolean;
@@ -108,7 +114,7 @@ export function QualitySelector() {
 
         if (json.needsClientMerge && json.videoUrl && json.audioUrl) {
           setDownloading(false);
-          setMergeProgress(0.01); // 触发合并进度显示
+          setMergeProgress(0.01);
 
           const { clientMergeAndDownload } = await import("@/lib/client-merge");
           await clientMergeAndDownload({
@@ -140,7 +146,6 @@ export function QualitySelector() {
 
       const contentDisposition = resp.headers.get("content-disposition") ?? "";
       const filenamePart = contentDisposition.match(/filename="([^"]+)"/)?.[1] ?? filename;
-
       const platform = resp.headers.get("x-platform") ?? "bilibili";
       const blob = await resp.blob();
 
@@ -171,75 +176,138 @@ export function QualitySelector() {
     }
   }
 
-  const isLocked = !!selected?.locked;
-
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* 画质选择 */}
-      <Select
-        value={String(selectedIndex)}
-        onChange={(e) => handleQualityChange(Number(e.target.value))}
-        className="w-52"
-      >
-        {video.streams.map((stream, i) => (
-          <option key={i} value={i}>
-            {stream.locked ? "🔒 " : ""}
-            {stream.label}
-            {stream.size ? ` (${formatFileSize(stream.size)})` : ""}
-          </option>
-        ))}
-      </Select>
+    <div className="space-y-3">
+      {/* 画质 chip 列表 */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="选择画质">
+        {video.streams.map((stream, i) => {
+          const active = selectedIndex === i;
+          const locked = !!stream.locked;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleQualityChange(i)}
+              disabled={isBusy}
+              aria-pressed={active}
+              aria-label={`${stream.label}${stream.size ? `，${formatFileSize(stream.size)}` : ""}${locked ? "，需要权限" : ""}`}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors",
+                "font-mono tabular-nums",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                "disabled:cursor-not-allowed",
+                active && !locked
+                  ? "border-[#4fffb0] text-[#4fffb0] bg-[rgba(79,255,176,0.08)]"
+                  : locked
+                    ? "border-border text-muted-foreground/50 bg-transparent"
+                    : "border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground bg-transparent"
+              )}
+            >
+              {locked && <Lock className="h-3 w-3 shrink-0" aria-hidden="true" />}
+              <span className="font-medium">{stream.label}</span>
+              {stream.size && (
+                <span className="text-xs opacity-60">
+                  {formatFileSize(stream.size)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* 格式选择 */}
+      {/* 锁定提示：内联展开，不用 modal */}
+      {lockedHint !== null && video.streams[lockedHint]?.locked && (
+        <p className="text-xs text-amber-500/80">
+          {video.streams[lockedHint]?.lockReason ?? "需要登录才能下载此画质"}
+          {video.platform === "bilibili" && (
+            <>
+              {" "}
+              <Link
+                href="/settings"
+                className="underline underline-offset-2 hover:text-amber-400 transition-colors"
+              >
+                前往设置扫码登录
+              </Link>
+            </>
+          )}
+        </p>
+      )}
+
+      {/* 格式 chip 列表（多于一个时显示）*/}
       {!isLocked && formatOptions.length > 1 && (
-        <Select value={outputFormat} onChange={(e) => setOutputFormat(e.target.value)} className="w-52">
-          {formatOptions.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </Select>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0">格式</span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="输出格式">
+            {formatOptions.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setOutputFormat(f.value)}
+                disabled={isBusy}
+                aria-pressed={outputFormat === f.value}
+                className={cn(
+                  "inline-flex items-center rounded px-2.5 py-1 text-xs font-mono transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                  "disabled:cursor-not-allowed",
+                  outputFormat === f.value
+                    ? "bg-foreground/10 text-foreground border border-border"
+                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5 border border-transparent"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* 下载按钮 */}
-      <Button
-        onClick={handleDownload}
-        disabled={downloading || isLocked || mergeProgress > 0}
-        className="gap-2"
-        variant={isLocked ? "outline" : "default"}
-      >
-        {isLocked ? (
-          <Lock className="h-4 w-4" />
-        ) : mergeProgress > 0 ? (
-          <Cpu className="h-4 w-4 animate-pulse" />
-        ) : (
-          <Download className="h-4 w-4" />
+      {/* 分辨率 + 下载按钮行 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {selected?.width && selected.height && !isLocked && (
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            {selected.width}×{selected.height}
+          </span>
         )}
-        {mergeProgress > 0
-          ? `浏览器合并中 ${Math.round(mergeProgress * 100)}%`
-          : downloading
-            ? "下载中..."
-            : isLocked
-              ? "需要权限"
-              : "下载"}
-      </Button>
 
-      {/* 分辨率提示 */}
-      {selected?.width && selected.height && !isLocked && mergeProgress === 0 && (
-        <span className="text-xs text-muted-foreground">
-          {selected.width}×{selected.height}
-        </span>
-      )}
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={isBusy || isLocked}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+            isLocked
+              ? "border border-border text-muted-foreground cursor-not-allowed"
+              : isBusy
+                ? "bg-foreground/10 text-muted-foreground cursor-wait"
+                : "bg-foreground text-background hover:bg-[#4fffb0] hover:text-background"
+          )}
+        >
+          {isLocked ? (
+            <Lock className="h-4 w-4" aria-hidden="true" />
+          ) : mergeProgress > 0 ? (
+            <Cpu className="h-4 w-4 animate-pulse" aria-hidden="true" />
+          ) : (
+            <Download className="h-4 w-4" aria-hidden="true" />
+          )}
+          <span>
+            {mergeProgress > 0
+              ? `合并中 ${Math.round(mergeProgress * 100)}%`
+              : downloading
+                ? "下载中..."
+                : isLocked
+                  ? "需要权限"
+                  : "下载"}
+          </span>
+        </button>
 
-      {/* 客户端合并提示 */}
-      {mergeProgress > 0 && (
-        <span className="text-xs text-blue-600 dark:text-blue-400">正在浏览器中合并音视频，请稍候...</span>
-      )}
-
-      {/* 锁定提示 */}
-      {isLocked && selected?.lockReason && (
-        <span className="text-xs text-amber-600 dark:text-amber-400">{selected.lockReason}</span>
-      )}
+        {/* 合并说明 */}
+        {mergeProgress > 0 && (
+          <span className="text-xs text-muted-foreground">
+            浏览器合并音视频，请稍候
+          </span>
+        )}
+      </div>
     </div>
   );
 }
