@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!node_modules", "!.next", "!dist", "!.turbo", "!.claude", "!**/*.css"]
+    "includes": ["**", "!node_modules", "!.next", "!dist", "!.turbo", "!.claude", "!.agents", "!**/*.css"]
   },
   "formatter": {
     "enabled": true,
