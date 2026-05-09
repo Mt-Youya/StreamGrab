@@ -4,13 +4,13 @@ import {
   pollQrcodeStatus,
   clearBilibiliSession,
   isLoggedIn,
-  loadBilibiliSession,
+  loadBilibiliSessionAsync,
   saveBilibiliSession,
 } from "@/lib/bilibili-browser";
 
 export async function GET() {
-  const loggedIn = isLoggedIn();
-  const session = loadBilibiliSession();
+  const loggedIn = await isLoggedIn();
+  const session = await loadBilibiliSessionAsync();
   const sessdata = session?.cookies.find((c) => c.name === "SESSDATA");
   return NextResponse.json({
     loggedIn,
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
             };
           })
           .filter((c) => c.name);
-        saveBilibiliSession(cookies);
+        await saveBilibiliSession(cookies);
       }
       return NextResponse.json({ success: true, status: result.status });
     } catch (err) {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === "logout") {
-    clearBilibiliSession();
+    await clearBilibiliSession();
     return NextResponse.json({ success: true });
   }
 

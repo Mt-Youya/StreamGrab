@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dispatch, findParser } from "@streamgrab/core";
 import type { ParseApiResponse, VideoInfo } from "@streamgrab/types";
-import { loadBilibiliSession } from "@/lib/bilibili-browser";
+import { loadBilibiliSessionAsync } from "@/lib/bilibili-browser";
 import { douyinBrowserFetch } from "@/lib/douyin-browser";
 import { tiktokBrowserFetch } from "@/lib/tiktok-browser";
 import { tiktokHttpFetch } from "@streamgrab/parsers";
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // B站：优先用请求传来的 cookie，其次读 server session，最后用环境变量
     let resolvedCookie = cookie ?? process.env["BILIBILI_COOKIE"];
     if (!resolvedCookie && /bilibili\.com|BV[a-zA-Z0-9]{10}/.test(trimmedUrl)) {
-      const session = loadBilibiliSession();
+      const session = await loadBilibiliSessionAsync();
       if (session) {
         resolvedCookie = session.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
         console.log(`[parse] 使用已登录 B站 session cookie`);

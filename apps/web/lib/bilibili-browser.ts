@@ -9,9 +9,8 @@ import os from "node:os";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-// Vercel 没有持久文件系统，session 存在 /tmp（每次冷启动会丢失）
 const COOKIE_PATH = path.join(os.tmpdir(), "streamgrab_bilibili_cookies.json");
-const COOKIE_TTL_MS = 6 * 60 * 60 * 1000; // 6 小时
+const REDIS_KEY = "streamgrab:bilibili:session";
 
 interface CachedSession {
   cookies: Array<{
@@ -26,33 +25,107 @@ interface CachedSession {
   savedAt: number;
 }
 
-export function loadBilibiliSession(): CachedSession | null {
+// ── Redis 客户端（复用 parse-cache 的逻辑）─────────────────
+function makeRedisClient() {
+  if (process.env["UPSTASH_REDIS_REST_URL"] && process.env["UPSTASH_REDIS_REST_TOKEN"]) {
+    try {
+      const pkgName = ["@upstash", "redis"].join(String.fromCharCode(47));
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { Redis } = require(/* webpackIgnore: true */ pkgName);
+      return { type: "upstash" as const, client: new Redis() };
+    } catch {}
+  }
+  if (process.env["REDIS_URL"]) {
+    try {
+      const pkgName = ["io", "redis"].join("");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Redis = require(/* webpackIgnore: true */ pkgName);
+      return { type: "ioredis" as const, client: new Redis(process.env["REDIS_URL"]) };
+    } catch {}
+  }
+  return null;
+}
+
+const _redis = makeRedisClient();
+
+async function redisGet(): Promise<CachedSession | null> {
+  if (!_redis) return null;
   try {
-    if (!fs.existsSync(COOKIE_PATH)) return null;
-    const raw = fs.readFileSync(COOKIE_PATH, "utf-8");
-    const session: CachedSession = JSON.parse(raw);
-    if (Date.now() - session.savedAt > COOKIE_TTL_MS) return null;
-    return session;
+    if (_redis.type === "upstash") return (await _redis.client.get(REDIS_KEY)) as CachedSession | null;
+    const raw = await _redis.client.get(REDIS_KEY);
+    return raw ? (JSON.parse(raw) as CachedSession) : null;
   } catch {
     return null;
   }
 }
 
-export function saveBilibiliSession(cookies: CachedSession["cookies"]) {
+async function redisSet(session: CachedSession): Promise<void> {
+  if (!_redis) return;
   try {
-    const session: CachedSession = { cookies, savedAt: Date.now() };
+    // TTL 180 天，B站 Cookie 有效期通常半年
+    if (_redis.type === "upstash") await _redis.client.set(REDIS_KEY, session, { ex: 180 * 24 * 3600 });
+    else await _redis.client.set(REDIS_KEY, JSON.stringify(session), "EX", 180 * 24 * 3600);
+  } catch {}
+}
+
+async function redisDel(): Promise<void> {
+  if (!_redis) return;
+  try {
+    await _redis.client.del(REDIS_KEY);
+  } catch {}
+}
+
+// ── 文件读写（本地 /tmp 二级缓存）────────────────────────────
+function fileLoad(): CachedSession | null {
+  try {
+    if (!fs.existsSync(COOKIE_PATH)) return null;
+    return JSON.parse(fs.readFileSync(COOKIE_PATH, "utf-8")) as CachedSession;
+  } catch {
+    return null;
+  }
+}
+
+function fileSave(session: CachedSession) {
+  try {
     fs.writeFileSync(COOKIE_PATH, JSON.stringify(session));
   } catch {}
 }
 
-export function clearBilibiliSession() {
+function fileDel() {
   try {
     if (fs.existsSync(COOKIE_PATH)) fs.unlinkSync(COOKIE_PATH);
   } catch {}
 }
 
-export function isLoggedIn(): boolean {
-  const session = loadBilibiliSession();
+// ── 公开 API ─────────────────────────────────────────────────
+
+export async function loadBilibiliSessionAsync(): Promise<CachedSession | null> {
+  // 优先读 /tmp 内存缓存（快），没有再查 Redis
+  const cached = fileLoad();
+  if (cached) return cached;
+  const session = await redisGet();
+  if (session) fileSave(session); // 回写 /tmp 加速后续同容器请求
+  return session;
+}
+
+/** 同步版本：仅读 /tmp，供不支持 async 的调用方 */
+export function loadBilibiliSession(): CachedSession | null {
+  return fileLoad();
+}
+
+export async function saveBilibiliSession(cookies: CachedSession["cookies"]) {
+  const session: CachedSession = { cookies, savedAt: Date.now() };
+  fileSave(session);
+  await redisSet(session);
+}
+
+export async function clearBilibiliSession() {
+  fileDel();
+  await redisDel();
+}
+
+export async function isLoggedIn(): Promise<boolean> {
+  const session = await loadBilibiliSessionAsync();
   if (!session) return false;
   return session.cookies.some((c) => c.name === "SESSDATA" && c.value.length > 10);
 }
