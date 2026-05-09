@@ -1,4 +1,6 @@
 import type { IVideoParser, ParseOptions, VideoInfo, VideoStream } from "@streamgrab/types";
+// 用 undici（youtubei.js 内部依赖的版本）构建代理 fetch，确保兼容
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 
 const QUALITY_MAP: Record<string, string> = {
   "2160": "4K",
@@ -27,7 +29,8 @@ export const youtubeParser: IVideoParser = {
   },
 
   async parse(url: string, options: ParseOptions): Promise<VideoInfo> {
-    console.log(`[youtube] 开始解析 url="${url}"`);
+    const proxy = (options as Record<string, unknown>).proxy as string | undefined;
+    console.log(`[youtube] 开始解析 url="${url}" proxy=${proxy ?? "无"}`);
 
     // 动态 import，让 serverExternalPackages 生效（不被 Next.js bundle）
     const { Innertube } = await import("youtubei.js");
@@ -42,31 +45,81 @@ export const youtubeParser: IVideoParser = {
     const CLIENTS = ["TV_EMBEDDED", "IOS", "ANDROID", "WEB"] as const;
     type YTClient = typeof CLIENTS[number];
 
-    const yt = await Innertube.create({
-      retrieve_player: true,
-      generate_session_locally: true,
-    });
-
-    let info: Awaited<ReturnType<typeof yt.getInfo>> | null = null;
-    let lastError: Error | null = null;
-
-    for (const client of CLIENTS) {
-      try {
-        const candidate = await yt.getInfo(videoId, client as YTClient);
-        if (candidate.streaming_data) {
-          info = candidate;
-          console.log(`[youtube] client=${client} 获取流成功`);
-          break;
+    /** 创建 Innertube（注入 fetch）并遍历 CLIENTS 尝试获取 streaming_data */
+    async function tryInnertube(fetchFn?: typeof fetch) {
+      const ytInstance = await Innertube.create({
+        retrieve_player: true,
+        generate_session_locally: true,
+        fetch: fetchFn,
+      });
+      let result: Awaited<ReturnType<typeof ytInstance.getInfo>> | null = null;
+      let lastErr: Error | null = null;
+      for (const client of CLIENTS) {
+        try {
+          const candidate = await ytInstance.getInfo(videoId!, client as YTClient);
+          if (candidate.streaming_data) {
+            result = candidate;
+            console.log(`[youtube] client=${client} 获取流成功`);
+            break;
+          }
+          console.log(`[youtube] client=${client} streaming_data 为空，尝试下一个`);
+        } catch (e) {
+          lastErr = e as Error;
+          console.log(`[youtube] client=${client} 失败: ${(e as Error).message}`);
         }
-        console.log(`[youtube] client=${client} streaming_data 为空，尝试下一个`);
-      } catch (e) {
-        lastError = e as Error;
-        console.log(`[youtube] client=${client} 失败: ${(e as Error).message}`);
       }
+      if (!result) throw lastErr ?? new Error("无法获取视频流信息，所有 client 均失败");
+      return result;
     }
 
-    if (!info) {
-      throw lastError ?? new Error("无法获取视频流信息，所有 client 均失败");
+    // 代理优先，直链兜底
+    // 将 undici ProxyAgent 包装成 fetch 函数注入 Innertube
+    let info: Awaited<ReturnType<typeof tryInnertube>>;
+    if (proxy) {
+      const proxyAgent = new ProxyAgent({
+        uri: proxy,
+        requestTls: { rejectUnauthorized: false },
+        proxyTls: { rejectUnauthorized: false },
+      });
+      // undici@5 不接受 Request 对象，需要解包成 URL 字符串 + init
+      const proxyFetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        let url: string;
+        let mergedInit: Record<string, unknown> = { ...(init as object ?? {}) };
+        if (typeof input === "string") {
+          url = input;
+        } else if (input instanceof URL) {
+          url = input.href;
+        } else {
+          // Request 对象 —— 解包
+          const req = input as Request;
+          url = req.url;
+          mergedInit = {
+            method: req.method,
+            headers: Object.fromEntries((req.headers as Headers).entries()),
+            body: (req as Request & { body?: unknown }).body ?? undefined,
+            ...mergedInit,
+          };
+        }
+        return undiciFetch(url as Parameters<typeof undiciFetch>[0], {
+          ...mergedInit,
+          dispatcher: proxyAgent,
+        } as Parameters<typeof undiciFetch>[1]);
+      }) as unknown as typeof fetch;
+
+      try {
+        console.log(`[youtube] 尝试代理解析 proxy=${proxy}`);
+        info = await tryInnertube(proxyFetch);
+        console.log(`[youtube] 代理解析成功`);
+      } catch (proxyErr) {
+        const e = proxyErr as Error & { cause?: Error };
+        console.warn(`[youtube] 代理解析失败（${e.message}${e.cause ? " / " + e.cause.message : ""}），回退直链重试...`);
+        info = await tryInnertube();
+        console.log(`[youtube] 直链解析成功`);
+      }
+      // 延迟关闭 agent，避免 Innertube 内部异步请求还未完成时被取消
+      setTimeout(() => proxyAgent.close().catch(() => {}), 5000);
+    } else {
+      info = await tryInnertube();
     }
 
     const details = info.basic_info;

@@ -128,7 +128,7 @@ export function HistoryTable() {
                       {record.cover && (
                         <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded bg-muted">
                           <Image
-                            src={`/api/proxy?url=${encodeURIComponent(record.cover)}`}
+                            src={(() => { try { const s = JSON.parse(localStorage.getItem("streamgrab_settings") ?? "{}") as Record<string,string>; const p = s["httpProxy"] ? `&proxy=${encodeURIComponent(s["httpProxy"])}` : ""; return `/api/proxy?url=${encodeURIComponent(record.cover)}${p}`; } catch { return `/api/proxy?url=${encodeURIComponent(record.cover)}`; } })()}
                             alt=""
                             fill
                             className="object-cover"

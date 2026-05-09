@@ -123,6 +123,9 @@ importers:
       '@streamgrab/types':
         specifier: workspace:*
         version: link:../types
+      undici:
+        specifier: ^7.25.0
+        version: 7.25.0
       youtubei.js:
         specifier: ^13.0.0
         version: 13.4.0

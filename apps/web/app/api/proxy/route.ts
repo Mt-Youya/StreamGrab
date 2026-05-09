@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { proxyRequest } from "@streamgrab/parsers";
 
 const ALLOWED_HOSTS = [
   "bilivideo.com", "bilivideo.cn", "hdslb.com",
@@ -46,29 +47,48 @@ export async function GET(req: NextRequest) {
   }
 
   const referer = getReferer(target);
-  const upstream = await fetch(target, {
-    headers: {
-      "User-Agent": UA,
-      ...(referer ? { Referer: referer } : {}),
-    },
-  });
+  const reqHeaders: Record<string, string> = {
+    "User-Agent": UA,
+    ...(referer ? { Referer: referer } : {}),
+  };
 
-  if (!upstream.ok || !upstream.body) {
-    return NextResponse.json(
-      { error: `上游请求失败: ${upstream.status}` },
-      { status: upstream.status }
-    );
+  const httpProxy = req.nextUrl.searchParams.get("proxy") || process.env["HTTP_PROXY"] || process.env["http_proxy"];
+
+  try {
+    if (httpProxy) {
+      // 走代理：CONNECT 隧道（正确处理 HTTPS）
+      const { status, headers, buffer } = await proxyRequest(target, httpProxy, { headers: reqHeaders, timeout: 10000 });
+      if (status < 200 || status >= 300) {
+        return NextResponse.json({ error: `上游请求失败: ${status}` }, { status });
+      }
+      const contentType = headers["content-type"] ?? "application/octet-stream";
+      const contentLength = headers["content-length"];
+      return new NextResponse(new Uint8Array(buffer), {
+        status,
+        headers: {
+          "Content-Type": contentType,
+          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Resource-Policy": "cross-origin",
+          ...(contentLength ? { "Content-Length": contentLength } : {}),
+        },
+      });
+    }
+
+    const upstream = await fetch(target, { headers: reqHeaders });
+    if (!upstream.ok || !upstream.body) {
+      return NextResponse.json({ error: `上游请求失败: ${upstream.status}` }, { status: upstream.status });
+    }
+    const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+    const contentLength = upstream.headers.get("content-length");
+    return new NextResponse(upstream.body, {
+      headers: {
+        "Content-Type": contentType,
+        "Access-Control-Allow-Origin": "*",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        ...(contentLength ? { "Content-Length": contentLength } : {}),
+      },
+    });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
   }
-
-  const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
-  const contentLength = upstream.headers.get("content-length");
-
-  return new NextResponse(upstream.body, {
-    headers: {
-      "Content-Type": contentType,
-      "Access-Control-Allow-Origin": "*",
-      "Cross-Origin-Resource-Policy": "cross-origin",
-      ...(contentLength ? { "Content-Length": contentLength } : {}),
-    },
-  });
 }

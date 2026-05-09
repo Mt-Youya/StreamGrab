@@ -6,16 +6,17 @@
  * - 否则 → 本地 Playwright（需安装 chromium）
  */
 
-export async function douyinBrowserFetch(videoId: string): Promise<string> {
+export async function douyinBrowserFetch(videoId: string, proxy?: string): Promise<string> {
   const token = process.env["BROWSERLESS_TOKEN"];
   if (token) {
-    return fetchViaBrowserless(videoId, token);
+    return fetchViaBrowserless(videoId, token, proxy);
   }
-  return fetchViaLocalPlaywright(videoId);
+  return fetchViaLocalPlaywright(videoId, proxy);
 }
 
-async function fetchViaBrowserless(videoId: string, token: string): Promise<string> {
-  const endpoint = `https://production-sfo.browserless.io/chromium/function?token=${token}`;
+async function fetchViaBrowserless(videoId: string, token: string, proxy?: string): Promise<string> {
+  const proxyParam = proxy ? `&proxy=${encodeURIComponent(proxy)}` : "";
+  const endpoint = `https://production-sfo.browserless.io/chromium/function?token=${token}${proxyParam}`;
 
   const code = `
     export default async ({ page }) => {
@@ -59,7 +60,7 @@ async function fetchViaBrowserless(videoId: string, token: string): Promise<stri
   return result.data;
 }
 
-async function fetchViaLocalPlaywright(videoId: string): Promise<string> {
+async function fetchViaLocalPlaywright(videoId: string, proxy?: string): Promise<string> {
   const { chromium } = await import("playwright");
 
   const browser = await chromium.launch({
@@ -70,6 +71,7 @@ async function fetchViaLocalPlaywright(videoId: string): Promise<string> {
     const context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       locale: "zh-CN",
+      ...(proxy ? { proxy: { server: proxy } } : {}),
     });
 
     let detailBody: string | null = null;

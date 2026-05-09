@@ -81,6 +81,7 @@ export function QualitySelector() {
         taskId,
         formatId: selected.formatId || undefined,
         outputFormat,
+        mimeType: selected.mimeType || undefined,
         proxy: settings["httpProxy"] || undefined,
         ytdlpPath: settings["ytdlpPath"] || undefined,
       };

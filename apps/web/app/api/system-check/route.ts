@@ -21,7 +21,7 @@ function checkPlaywright(): { available: boolean; version?: string } {
   }
 }
 
-function isVercel(): boolean {
+function isVercel() {
   return !!process.env["VERCEL"];
 }
 
@@ -57,7 +57,19 @@ export async function GET() {
         ? "pnpm --filter @streamgrab/web add playwright && npx playwright install chromium"
         : undefined,
     },
-    tiktok: { ok: true, note: "@distube/ytdl-core，无需额外依赖" },
+    tiktok: {
+      ok: playwright.available || !!browserlessToken,
+      note: playwright.available
+        ? `Playwright ${playwright.version ?? "已安装"}`
+        : browserlessToken
+        ? "Browserless Token 已配置"
+        : vercel
+        ? "需要配置 BROWSERLESS_TOKEN 环境变量"
+        : "需要安装 Playwright + Chromium（与抖音共用）",
+      install: !playwright.available && !browserlessToken && !vercel
+        ? "pnpm --filter @streamgrab/web add playwright && npx playwright install chromium"
+        : undefined,
+    },
     youtube: {
       ok: true,
       note: "@distube/ytdl-core 解析，" + (ffmpeg.available ? "FFmpeg 合并音视频" : vercel ? "浏览器端合并" : "需要 FFmpeg 才能有声音"),

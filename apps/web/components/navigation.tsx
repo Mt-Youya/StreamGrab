@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Download, History, Settings } from "lucide-react";
+import { Download, History, Settings, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
+import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { href: "/", label: "下载", icon: Download },
@@ -13,6 +15,7 @@ const NAV_ITEMS = [
 
 export function Navigation() {
   const pathname = usePathname();
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
@@ -35,6 +38,15 @@ export function Navigation() {
               {label}
             </Link>
           ))}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="ml-1"
+            aria-label="切换主题"
+          >
+            {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
         </nav>
       </div>
     </header>

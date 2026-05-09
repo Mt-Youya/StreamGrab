@@ -81,6 +81,7 @@ export interface DownloadApiRequest {
   taskId: string;
   formatId?: string;
   outputFormat?: string; // mp4 | mkv | webm
+  mimeType?: string;
   proxy?: string;
   ytdlpPath?: string;
 }

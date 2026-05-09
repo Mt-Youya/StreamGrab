@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTask, setProgress, setStatus } from "@streamgrab/core";
 import { sanitizeFilename } from "@/lib/utils";
 import type { DownloadApiRequest, Platform } from "@streamgrab/types";
+import { proxyDownloadStream } from "@streamgrab/parsers";
+import { deleteCached } from "@/lib/parse-cache";
 import { v4 as uuidv4 } from "uuid";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const ytdl = require("@distube/ytdl-core") as typeof import("@distube/ytdl-core");
 
 const DESKTOP_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -28,17 +28,39 @@ function detectPlatformFromUrl(url: string): Platform {
   return "bilibili";
 }
 
-/** 流式下载到临时文件，支持进度回调 */
+/** 流式下载到临时文件，支持进度回调和代理 */
 async function downloadToTmp(
   url: string,
   headers: Record<string, string>,
   suffix: string,
   onProgress?: (downloaded: number, total: number) => void,
+  proxy?: string,
 ): Promise<string> {
+  const tmpPath = path.join(os.tmpdir(), `sg_${uuidv4()}${suffix}`);
+
+  if (proxy) {
+    // 走代理：CONNECT 隧道流式下载
+    const writeStream = fs.createWriteStream(tmpPath);
+    let downloaded = 0;
+    let total = 0;
+    await proxyDownloadStream(url, proxy, headers, (chunk, contentLength) => {
+      if (contentLength > 0 && total === 0) total = contentLength;
+      writeStream.write(chunk);
+      downloaded += chunk.byteLength;
+      onProgress?.(downloaded, total);
+    });
+    await new Promise<void>((res, rej) => {
+      writeStream.end();
+      writeStream.on("finish", res);
+      writeStream.on("error", rej);
+    });
+    return tmpPath;
+  }
+
+  // 无代理：原有 fetch 逻辑
   const resp = await fetch(url, { headers });
   if (!resp.ok || !resp.body) throw new Error(`下载失败 ${resp.status} ${resp.statusText}`);
   const total = Number(resp.headers.get("content-length") ?? 0);
-  const tmpPath = path.join(os.tmpdir(), `sg_${uuidv4()}${suffix}`);
   const writeStream = fs.createWriteStream(tmpPath);
   const reader = resp.body.getReader();
   let downloaded = 0;
@@ -60,20 +82,33 @@ async function downloadToTmp(
   return tmpPath;
 }
 
-/** 用 ytdl 下载到临时文件（YouTube/TikTok，绕过 IP 绑定） */
-async function ytdlDownloadToTmp(rawUrl: string, itag: number, suffix: string): Promise<string> {
-  const tmpPath = path.join(os.tmpdir(), `sg_${uuidv4()}${suffix}`);
-  return new Promise((resolve, reject) => {
-    const stream = ytdl(rawUrl, { quality: itag });
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    stream.on("end", () => {
-      fs.writeFileSync(tmpPath, Buffer.concat(chunks));
-      resolve(tmpPath);
-    });
-    stream.on("error", reject);
-  });
+/**
+ * 代理优先，直链兜底：有代理先走代理，失败再走直链
+ * 临时文件由内部 downloadToTmp 创建，调用方负责清理
+ */
+async function downloadWithFallback(
+  url: string,
+  headers: Record<string, string>,
+  suffix: string,
+  onProgress?: (downloaded: number, total: number) => void,
+  proxy?: string,
+): Promise<string> {
+  if (proxy) {
+    try {
+      console.log(`[download] 尝试代理下载 proxy=${proxy}`);
+      const tmpPath = await downloadToTmp(url, headers, suffix, onProgress, proxy);
+      console.log(`[download] 代理下载成功`);
+      return tmpPath;
+    } catch (proxyErr) {
+      console.warn(`[download] 代理下载失败（${(proxyErr as Error).message}），回退直链重试...`);
+      const tmpPath = await downloadToTmp(url, headers, suffix, onProgress, undefined);
+      console.log(`[download] 直链下载成功`);
+      return tmpPath;
+    }
+  }
+  return downloadToTmp(url, headers, suffix, onProgress, undefined);
 }
+
 
 function mergeWithFFmpeg(videoPath: string, audioPath: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -97,10 +132,17 @@ function mergeWithFFmpeg(videoPath: string, audioPath: string, outputPath: strin
 
 export async function POST(req: NextRequest) {
   const tmpFiles: string[] = [];
+  let _rawUrl = "";
+  let _platform = "";
 
   try {
-    const body = (await req.json()) as DownloadApiRequest & { proxy?: string };
+    const body = (await req.json()) as DownloadApiRequest & { proxy?: string; mimeType?: string };
     const { url: rawUrl, streamUrl, audioUrl, filename, formatId } = body;
+    _rawUrl = rawUrl ?? "";
+    _platform = detectPlatformFromUrl(streamUrl ?? "");
+    // 根据 mimeType 决定视频临时文件容器（VP9/AV1 用 webm，H.264/H.265 用 mp4）
+    const videoMime = (body.mimeType ?? "video/mp4").toLowerCase();
+    const videoTmpExt = videoMime.includes("webm") ? ".video.webm" : ".video.mp4";
     const outputFormat = (body.outputFormat ?? "mp4").toLowerCase();
     const outputExt = `.${outputFormat}`;
 
@@ -113,28 +155,36 @@ export async function POST(req: NextRequest) {
     createTask(id, safeFilename);
     setStatus(id, "downloading");
 
+    const proxy = body.proxy ?? process.env["HTTP_PROXY"] ?? process.env["http_proxy"];
     const platform = detectPlatformFromUrl(streamUrl);
     const headers = PLATFORM_HEADERS[platform] ?? PLATFORM_HEADERS["bilibili"]!;
     const dlFilename = safeFilename.endsWith(outputExt) ? safeFilename : safeFilename + outputExt;
 
-    console.log(`[download] platform=${platform} hasAudio=${!!audioUrl} filename=${safeFilename}`);
+    console.log(`[download] platform=${platform} hasAudio=${!!audioUrl} filename=${safeFilename} proxy=${proxy ?? "无"}`);
 
-    // ── YouTube：用 ytdl 流式下载（绕过 googlevideo IP 绑定） ──
-    if (platform === "youtube" && rawUrl) {
-      console.log(`[download] youtube ytdl 模式 formatId=${formatId}`);
+    // ── YouTube：streamUrl/audioUrl 已是 googlevideo 直链，走代理直接下载 ──
+    if (platform === "youtube") {
+      console.log(`[download] youtube 直链模式 hasAudio=${!!audioUrl}`);
       setProgress(id, 5);
 
-      // formatId 格式：videoItag+audioItag 或 单itag
-      const [videoItagStr, audioItagStr] = (formatId ?? "").split("+");
-      const videoItag = Number(videoItagStr);
-      const audioItag = audioItagStr ? Number(audioItagStr) : null;
+      const ytHeaders = { ...PLATFORM_HEADERS["youtube"]! };
 
       try {
-        if (audioItag) {
-          // 下载视频流 + 音频流，尝试 FFmpeg 合并
+        if (audioUrl) {
+          // 视频流 + 音频流，FFmpeg 合并
+          let videoTotal = 0, audioTotal = 0, videoDl = 0, audioDl = 0;
+          function refreshProgress() {
+            const total = videoTotal + audioTotal;
+            if (total <= 0) return;
+            setProgress(id, Math.min(Math.round(((videoDl + audioDl) / total) * 50) + 5, 55));
+          }
           const [videoPath, audioPath] = await Promise.all([
-            ytdlDownloadToTmp(rawUrl, videoItag, ".video.mp4"),
-            ytdlDownloadToTmp(rawUrl, audioItag, ".audio.m4a"),
+            downloadWithFallback(streamUrl, ytHeaders, videoTmpExt, (dl, total) => {
+              videoDl = dl; videoTotal = total || videoTotal; refreshProgress();
+            }, proxy),
+            downloadWithFallback(audioUrl, ytHeaders, ".audio.m4a", (dl, total) => {
+              audioDl = dl; audioTotal = total || audioTotal; refreshProgress();
+            }, proxy),
           ]);
           tmpFiles.push(videoPath, audioPath);
           setProgress(id, 60);
@@ -158,7 +208,6 @@ export async function POST(req: NextRequest) {
             });
           } catch (ffErr) {
             if ((ffErr as Error).message === "FFMPEG_NOT_FOUND") {
-              // Vercel 无 FFmpeg：通知前端用 ffmpeg-wasm 在浏览器端合并
               console.warn("[download] FFmpeg 不可用，通知前端进行客户端合并");
               setStatus(id, "done");
               tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
@@ -168,14 +217,14 @@ export async function POST(req: NextRequest) {
                 audioUrl,
                 filename: dlFilename,
                 platform,
-                headers: headers,
+                headers: ytHeaders,
               });
             }
             throw ffErr;
           }
         } else {
           // 单流（含音视频）
-          const videoPath = await ytdlDownloadToTmp(rawUrl, videoItag, outputExt);
+          const videoPath = await downloadWithFallback(streamUrl, ytHeaders, outputExt, undefined, proxy);
           tmpFiles.push(videoPath);
           const buf = fs.readFileSync(videoPath);
           setStatus(id, "done");
@@ -211,12 +260,12 @@ export async function POST(req: NextRequest) {
       let videoPath: string, audioPath: string;
       try {
         [videoPath, audioPath] = await Promise.all([
-          downloadToTmp(streamUrl, headers, ".video.mp4", (dl, total) => {
+          downloadWithFallback(streamUrl, headers, videoTmpExt, (dl, total) => {
             videoDl = dl; videoTotal = total || videoTotal; refreshProgress();
-          }),
-          downloadToTmp(audioUrl, headers, ".audio.m4a", (dl, total) => {
+          }, proxy),
+          downloadWithFallback(audioUrl, headers, ".audio.m4a", (dl, total) => {
             audioDl = dl; audioTotal = total || audioTotal; refreshProgress();
-          }),
+          }, proxy),
         ]);
         tmpFiles.push(videoPath, audioPath);
       } catch (err) {
@@ -262,28 +311,76 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── 抖音等单流 → 直接透传 ──
-    let videoResp: Response;
-    try {
-      videoResp = await fetch(streamUrl, { headers });
-    } catch (err) {
-      const msg = `网络请求失败: ${(err as Error).message}`;
-      setStatus(id, "error", msg);
-      return NextResponse.json({ error: msg }, { status: 502 });
+    // ── 抖音等单流 ──
+    if (proxy) {
+      // 有代理：代理优先下载到临时文件，失败自动回退直链
+      let videoPath: string;
+      try {
+        videoPath = await downloadWithFallback(streamUrl, headers, outputExt, (dl, total) => {
+          if (total > 0) setProgress(id, Math.round((dl / total) * 100));
+        }, proxy);
+      } catch (err) {
+        const msg = `网络请求失败: ${(err as Error).message}`;
+        setStatus(id, "error", msg);
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+      tmpFiles.push(videoPath);
+      const buf = fs.readFileSync(videoPath);
+      setStatus(id, "done"); setProgress(id, 100);
+      tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+      return new NextResponse(buf, {
+        headers: {
+          "Content-Type": `video/${outputFormat}`,
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
+          "Content-Length": String(buf.byteLength),
+          "X-Task-Id": id,
+        },
+      });
     }
 
-    if (!videoResp.ok || !videoResp.body) {
-      const detail = await videoResp.text().catch(() => "");
-      const msg = `视频流请求失败: ${videoResp.status} ${videoResp.statusText}`;
-      setStatus(id, "error", msg);
-      return NextResponse.json({ error: msg, detail: detail.slice(0, 200) }, { status: 502 });
+    // 无代理：直接流式透传（性能最优）；若失败，再走临时文件兜底
+    let videoResp: Response | null = null;
+    try {
+      videoResp = await fetch(streamUrl, { headers });
+    } catch (fetchErr) {
+      console.warn(`[download] 直链 fetch 失败（${(fetchErr as Error).message}），尝试临时文件模式...`);
+    }
+
+    if (!videoResp || !videoResp.ok || !videoResp.body) {
+      // 直链 fetch 失败或响应异常，兜底走临时文件下载
+      if (videoResp && !videoResp.ok) {
+        const detail = await videoResp.text().catch(() => "");
+        console.warn(`[download] 直链响应异常 ${videoResp.status}，兜底临时文件... detail=${detail.slice(0, 100)}`);
+      }
+      let videoPath: string;
+      try {
+        videoPath = await downloadToTmp(streamUrl, headers, outputExt, (dl, total) => {
+          if (total > 0) setProgress(id, Math.round((dl / total) * 100));
+        });
+      } catch (err) {
+        const msg = `网络请求失败: ${(err as Error).message}`;
+        setStatus(id, "error", msg);
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+      tmpFiles.push(videoPath);
+      const buf = fs.readFileSync(videoPath);
+      setStatus(id, "done"); setProgress(id, 100);
+      tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+      return new NextResponse(buf, {
+        headers: {
+          "Content-Type": `video/${outputFormat}`,
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(dlFilename)}"`,
+          "Content-Length": String(buf.byteLength),
+          "X-Task-Id": id,
+        },
+      });
     }
 
     const contentLength = Number(videoResp.headers.get("content-length") ?? 0);
     let downloaded = 0;
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = videoResp.body!.getReader();
+        const reader = videoResp!.body!.getReader();
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -312,6 +409,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     tmpFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
     console.error("[download] unexpected error:", err);
+
+    // 流地址失效时清除解析缓存，下次强制重新解析
+    const errMsg = (err as Error).message ?? "";
+    if (_rawUrl && _platform && /下载失败|4\d\d|502/i.test(errMsg)) {
+      deleteCached(_rawUrl, _platform).catch(() => {});
+    }
+
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

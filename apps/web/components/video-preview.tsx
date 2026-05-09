@@ -8,16 +8,23 @@ import { PLATFORM_COLORS, PLATFORM_LABELS } from "@/lib/detect-platform";
 import { formatDuration } from "@/lib/utils";
 import { Clock, User } from "lucide-react";
 
-function toCoverSrc(cover: string): string {
+function toCoverSrc(cover: string, proxy?: string): string {
   if (!cover) return cover;
-  return `/api/proxy?url=${encodeURIComponent(cover)}`;
+  const p = proxy ? `&proxy=${encodeURIComponent(proxy)}` : "";
+  return `/api/proxy?url=${encodeURIComponent(cover)}${p}`;
 }
 
 export function VideoPreview() {
   const video = useAppStore((s) => s.currentVideo);
   if (!video) return null;
 
-  const coverSrc = toCoverSrc(video.cover);
+  let httpProxy: string | undefined;
+  try {
+    const raw = localStorage.getItem("streamgrab_settings");
+    if (raw) httpProxy = (JSON.parse(raw) as Record<string, string>)["httpProxy"] || undefined;
+  } catch {}
+
+  const coverSrc = toCoverSrc(video.cover, httpProxy);
 
   return (
     <Card className="overflow-hidden">
